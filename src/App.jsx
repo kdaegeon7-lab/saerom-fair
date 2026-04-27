@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BookOpen, Sparkles, Trophy, ArrowLeft, Plus, Check, MessageSquare,
   Users, Compass, Lightbulb, Globe, GraduationCap, Target, Heart,
@@ -674,8 +675,8 @@ function PdfModal({ subject, onClose }) {
 
   if (!url) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(27,37,65,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}>
       <div className="relative w-full max-w-4xl h-[90vh] rounded-2xl overflow-hidden flex flex-col"
@@ -713,7 +714,8 @@ function PdfModal({ subject, onClose }) {
             className="w-full h-full" style={{ border: 'none' }} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
