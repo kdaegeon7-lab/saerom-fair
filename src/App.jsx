@@ -5,7 +5,8 @@ import {
   Users, Compass, Lightbulb, Globe, GraduationCap, Target, Heart,
   Send, Clock, Award, ChevronRight, RefreshCw, AlertCircle, MapPin,
   ThumbsUp, MessageCircle, FileText, X, LogIn, LogOut, User,
-  Lock, Hash, Briefcase, ShieldCheck, Search
+  Lock, Hash, Briefcase, ShieldCheck, Search,
+  QrCode, Camera, Crown, Medal, Flame, TrendingUp
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
 
@@ -229,12 +230,39 @@ const PROGRAMS = [
   { icon: Heart, color: '#FF5B8A', title: '학생 맞춤형 프로젝트', desc: '관심사와 진로에 맞춘 자율적 교육과정 + 창의적 역량을 함양하는 프로젝트 수업.', tags: ['맞춤형', '프로젝트'] },
 ];
 
+// 미션 정의 - 모두 10P, 자동 적립 방식
 const MISSIONS = [
-  { id: 'm1', title: '관심 부스 3곳 방문', desc: '궁금했던 교과 부스 3곳을 돌며 체크인하기', points: 30 },
-  { id: 'm2', title: '선배 인터뷰', desc: '해당 과목을 수강한 선배와 5분 이상 대화', points: 20 },
-  { id: 'm3', title: '시뮬레이션 완주', desc: '과목 선택 시뮬레이션 한 번 끝까지 체험', points: 20 },
-  { id: 'm4', title: '박람회 커뮤니티', desc: '커뮤니티에 후기나 의견, 유용한 정보 자유롭게 남기기', points: 15 },
-  { id: 'm5', title: '진로상담 부스 방문', desc: '진로상담 부스에서 1회 이상 상담받기', points: 15 },
+  {
+    id: 'booth-subject',
+    title: '과목별 부스 방문',
+    desc: '과목 부스에서 QR코드를 스캔하면 자동 적립 (1부스당 10P)',
+    pointsPerVisit: 10,
+    type: 'qr',
+    category: 'subject',
+  },
+  {
+    id: 'booth-senior',
+    title: '선배와의 만남',
+    desc: '선배 부스에서 QR코드를 스캔하면 자동 적립 (1부스당 10P)',
+    pointsPerVisit: 10,
+    type: 'qr',
+    category: 'senior',
+  },
+  {
+    id: 'simulation',
+    title: '과목 선택 시뮬레이션 완주',
+    desc: '시뮬레이션을 끝까지 완료하면 자동 적립 (최초 1회 10P)',
+    points: 10,
+    type: 'auto',
+  },
+  {
+    id: 'community',
+    title: '박람회 커뮤니티 활동',
+    desc: '50자 이상의 후기·의견·정보를 남기면 글당 10P (최대 5회 50P)',
+    pointsPerPost: 10,
+    maxPosts: 5,
+    type: 'auto',
+  },
 ];
 
 const ls = {
@@ -290,7 +318,7 @@ export default function App() {
       <Header onHome={() => setPage('home')} page={page} user={user} onLogout={handleLogout} />
       <div className="fade-in flex-1">
         {page === 'home' && <Home onNavigate={setPage} user={user} />}
-        {page === 'simulation' && <Simulation onBack={() => setPage('home')} />}
+        {page === 'simulation' && <Simulation onBack={() => setPage('home')} user={user} />}
         {page === 'programs' && <Programs onBack={() => setPage('home')} />}
         {page === 'fair' && <Fair onBack={() => setPage('home')} user={user} />}
       </div>
@@ -703,9 +731,10 @@ function Home({ onNavigate, user }) {
   );
 }
 
-function Simulation({ onBack }) {
+function Simulation({ onBack, user }) {
   const [cohort, setCohort] = useState(null);
   const [selected, setSelected] = useState({});
+  const [justCompleted, setJustCompleted] = useState(false);
 
   useEffect(() => {
     const s = ls.get('sim_state');
@@ -728,6 +757,37 @@ function Simulation({ onBack }) {
     if (!cohort) return [];
     return CHOICE_GROUPS.filter(g => cohort === 'g1' || g.grade === 3);
   }, [cohort]);
+
+  // 시뮬레이션 완주 자동 적립 (1회만)
+  useEffect(() => {
+    if (!user || !cohort || !isSupabaseConfigured || !visibleGroups.length) return;
+    const allCompleted = visibleGroups.every(g => (selected[g.id]?.size || 0) === g.nChoose);
+    if (!allCompleted) return;
+
+    const cacheKey = `sim_reward_${user.student_id}`;
+    if (ls.get(cacheKey)) return;
+
+    (async () => {
+      const { data: existing } = await supabase
+        .from('mission_rewards')
+        .select('id')
+        .eq('student_id', user.student_id)
+        .eq('reward_type', 'simulation')
+        .maybeSingle();
+      if (existing) {
+        ls.set(cacheKey, true);
+        return;
+      }
+      const { error } = await supabase
+        .from('mission_rewards')
+        .insert({ student_id: user.student_id, reward_type: 'simulation', points: 10 });
+      if (!error) {
+        ls.set(cacheKey, true);
+        setJustCompleted(true);
+        setTimeout(() => setJustCompleted(false), 5000);
+      }
+    })();
+  }, [selected, visibleGroups, user, cohort]);
 
   const toggle = (groupId, name, group) => {
     setSelected(prev => {
@@ -795,6 +855,19 @@ function Simulation({ onBack }) {
           </button>
         </div>
       </div>
+
+      {justCompleted && (
+        <div className="mb-4 p-4 rounded-2xl flex items-center gap-3 fade-in"
+          style={{ background: 'linear-gradient(135deg, #DDF5EA, #FFFBF0)', border: '2px solid #3BC4A0' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#3BC4A0' }}>
+            <Award className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-display text-base">🎉 시뮬레이션 완주 +10P 적립!</p>
+            <p className="text-xs" style={{ color: '#4A5568' }}>박람회 미션 화면에서 내 점수를 확인해보세요.</p>
+          </div>
+        </div>
+      )}
 
       <ProgressSummary groups={visibleGroups} selected={selected} />
 
@@ -1062,16 +1135,21 @@ function Programs({ onBack }) {
 
 function Fair({ onBack, user }) {
   const [tab, setTab] = useState('mission');
-  const [done, setDone] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [booths, setBooths] = useState([]);
+  const [myVisits, setMyVisits] = useState([]); // 내 부스 방문 기록
+  const [myRewards, setMyRewards] = useState([]); // 내 자동 적립 기록
+  const [allScores, setAllScores] = useState([]); // 전체 학생 랭킹용
+  const [scanning, setScanning] = useState(false); // QR 스캐너 표시 여부
+  const [scanResult, setScanResult] = useState(null); // 스캔 결과 토스트
 
+  // 데이터 로드
   useEffect(() => {
-    setDone(ls.get(`missions_${user.student_id}`) || []);
-
     if (!isSupabaseConfigured) { setLoading(false); return; }
 
-    const load = async () => {
+    const loadAll = async () => {
+      // 게시글
       const { data: postsData } = await supabase
         .from('posts')
         .select('*, likes:post_likes(user_id), comments:post_comments(*)')
@@ -1083,32 +1161,129 @@ function Fair({ onBack, user }) {
           comments: (p.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
         })));
       }
+
+      // 부스 목록
+      const { data: boothsData } = await supabase
+        .from('booths').select('*').eq('is_active', true).order('category').order('name');
+      if (boothsData) setBooths(boothsData);
+
+      // 내 부스 방문 기록
+      const { data: visitsData } = await supabase
+        .from('booth_visits').select('*').eq('student_id', user.student_id);
+      if (visitsData) setMyVisits(visitsData);
+
+      // 내 자동 적립 기록
+      const { data: rewardsData } = await supabase
+        .from('mission_rewards').select('*').eq('student_id', user.student_id);
+      if (rewardsData) setMyRewards(rewardsData);
+
+      // 전체 학생 점수 집계 (랭킹용)
+      await loadRanking();
       setLoading(false);
     };
-    load();
 
-    const channel = supabase.channel('posts-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_likes' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, load)
+    const loadRanking = async () => {
+      // 모든 booth_visits + mission_rewards를 가져와서 학번별로 합산
+      const [{ data: allVisits }, { data: allRewards }, { data: students }] = await Promise.all([
+        supabase.from('booth_visits').select('student_id, points'),
+        supabase.from('mission_rewards').select('student_id, points'),
+        supabase.from('students').select('student_id, nickname'),
+      ]);
+      const map = {};
+      const studentMap = {};
+      (students || []).forEach(s => { studentMap[s.student_id] = s.nickname; });
+      (allVisits || []).forEach(v => { map[v.student_id] = (map[v.student_id] || 0) + (v.points || 0); });
+      (allRewards || []).forEach(r => { map[r.student_id] = (map[r.student_id] || 0) + (r.points || 0); });
+      const ranking = Object.entries(map)
+        .map(([sid, pts]) => ({ student_id: sid, nickname: studentMap[sid] || '?', points: pts }))
+        .filter(r => r.points > 0)
+        .sort((a, b) => b.points - a.points);
+      setAllScores(ranking);
+    };
+
+    loadAll();
+
+    const channel = supabase.channel('fair-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_likes' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'booth_visits' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mission_rewards' }, loadAll)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user.student_id]);
 
-  const toggleMission = (id) => {
-    const next = done.includes(id) ? done.filter(x => x !== id) : [...done, id];
-    setDone(next);
-    ls.set(`missions_${user.student_id}`, next);
+  // QR 스캔 처리
+  const handleQrScan = async (decodedText) => {
+    if (!decodedText) return;
+    const code = String(decodedText).trim().toLowerCase();
+
+    // 부스 검증
+    const booth = booths.find(b => b.code === code);
+    if (!booth) {
+      setScanResult({ kind: 'error', message: '등록되지 않은 QR 코드예요. 부스 운영자에게 문의하세요.' });
+      setScanning(false);
+      setTimeout(() => setScanResult(null), 4000);
+      return;
+    }
+
+    // 이미 방문한 부스인지 확인
+    const already = myVisits.find(v => v.booth_code === booth.code);
+    if (already) {
+      setScanResult({ kind: 'warning', message: `${booth.name}은(는) 이미 방문한 부스예요. 다른 부스를 방문해주세요!` });
+      setScanning(false);
+      setTimeout(() => setScanResult(null), 4000);
+      return;
+    }
+
+    // 적립 시도
+    const { error } = await supabase.from('booth_visits').insert({
+      student_id: user.student_id,
+      booth_code: booth.code,
+      points: booth.points,
+    });
+
+    if (error) {
+      // 중복 키 에러 - 다른 탭에서 이미 적립된 경우
+      if (error.code === '23505') {
+        setScanResult({ kind: 'warning', message: `${booth.name}은(는) 이미 방문한 부스예요.` });
+      } else {
+        setScanResult({ kind: 'error', message: '적립 중 오류가 발생했어요. 다시 시도해주세요.' });
+      }
+    } else {
+      setScanResult({ kind: 'success', message: `🎉 ${booth.name} 방문! +${booth.points}P 적립 완료` });
+    }
+    setScanning(false);
+    setTimeout(() => setScanResult(null), 4000);
   };
 
+  // 게시글 작성: 50자 이상이면 자동 포인트 적립
   const submitPost = async (content) => {
     if (!isSupabaseConfigured) return;
-    await supabase.from('posts').insert({
-      nickname: user.nickname,
-      student_id: user.student_id,
-      content,
-    });
+    const { data, error } = await supabase.from('posts')
+      .insert({
+        nickname: user.nickname,
+        student_id: user.student_id,
+        content,
+      })
+      .select().single();
+
+    if (error || !data) return;
+
+    // 50자 이상 + 최대 5회 자동 적립
+    const charCount = (content || '').length; // 공백 포함
+    if (charCount >= 50) {
+      const myPostRewards = myRewards.filter(r => r.reward_type === 'post');
+      if (myPostRewards.length < 5) {
+        await supabase.from('mission_rewards').insert({
+          student_id: user.student_id,
+          reward_type: 'post',
+          post_id: data.id,
+          points: 10,
+        });
+      }
+    }
   };
 
   const toggleLike = async (postId) => {
@@ -1132,8 +1307,17 @@ function Fair({ onBack, user }) {
     });
   };
 
-  const points = done.reduce((sum, id) => sum + (MISSIONS.find(m => m.id === id)?.points || 0), 0);
-  const totalPoints = MISSIONS.reduce((s, m) => s + m.points, 0);
+  // 내 점수 계산
+  const myPoints = useMemo(() => {
+    const visitPts = myVisits.reduce((s, v) => s + (v.points || 0), 0);
+    const rewardPts = myRewards.reduce((s, r) => s + (r.points || 0), 0);
+    return visitPts + rewardPts;
+  }, [myVisits, myRewards]);
+
+  const myRank = useMemo(() => {
+    const idx = allScores.findIndex(s => s.student_id === user.student_id);
+    return idx >= 0 ? idx + 1 : null;
+  }, [allScores, user.student_id]);
 
   return (
     <main className="max-w-6xl mx-auto px-6 pt-8 pb-8">
@@ -1141,24 +1325,39 @@ function Fair({ onBack, user }) {
       <div className="mb-8">
         <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-4" style={{ background: '#DDF5EA', color: '#3BC4A0' }}>STEP 3</span>
         <h2 className="font-display text-4xl mb-3">박람회 미션 & 커뮤니티</h2>
-        <p style={{ color: '#4A5568' }}>미션을 달성하고, 체험 후기와 질문을 친구들과 나눠보세요.</p>
+        <p style={{ color: '#4A5568' }}>QR을 스캔하고 글을 남기며 포인트를 모아보세요. 부정 적립이 불가하도록 모든 점수는 자동으로 인증됩니다.</p>
       </div>
 
-      <div className="p-5 rounded-2xl mb-6 flex items-center gap-4" style={{ background: '#1B2541', color: '#FFFBF0' }}>
-        <Award className="w-8 h-8" style={{ color: '#FFC93C' }} />
-        <div className="flex-1">
-          <div className="flex items-baseline gap-2 mb-1.5">
-            <span className="font-display text-2xl" style={{ color: '#FFC93C' }}>{points}</span>
-            <span className="text-sm opacity-70">/ {totalPoints} 포인트</span>
+      {/* 내 점수 + 내 등수 */}
+      <div className="p-5 rounded-2xl mb-6" style={{ background: '#1B2541', color: '#FFFBF0' }}>
+        <div className="flex items-center gap-4 flex-wrap">
+          <Award className="w-8 h-8" style={{ color: '#FFC93C' }} />
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-xs opacity-70">내 누적 포인트</p>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-3xl" style={{ color: '#FFC93C' }}>{myPoints}</span>
+              <span className="text-sm opacity-70">P</span>
+            </div>
           </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.15)' }}>
-            <div className="h-full transition-all duration-500" style={{ width: `${(points / totalPoints) * 100}%`, background: '#FFC93C' }} />
-          </div>
+          {myRank && (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-2xl" style={{ background: 'rgba(255,201,60,0.15)' }}>
+              <TrendingUp className="w-5 h-5" style={{ color: '#FFC93C' }} />
+              <div>
+                <p className="text-[10px] opacity-70 leading-none mb-0.5">현재 등수</p>
+                <p className="font-display text-lg leading-none" style={{ color: '#FFC93C' }}>{myRank}위</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* 탭 */}
       <div className="flex gap-2 mb-6">
-        {[{ k: 'mission', label: '미션', icon: Trophy }, { k: 'community', label: '커뮤니티', icon: MessageSquare }].map(t => {
+        {[
+          { k: 'mission', label: '미션', icon: Trophy },
+          { k: 'ranking', label: '실시간 TOP 10', icon: Crown },
+          { k: 'community', label: '커뮤니티', icon: MessageSquare },
+        ].map(t => {
           const Icon = t.icon;
           const on = tab === t.k;
           return (
@@ -1171,41 +1370,333 @@ function Fair({ onBack, user }) {
         })}
       </div>
 
-      {tab === 'mission' && <MissionList done={done} onToggle={toggleMission} />}
+      {/* 스캔 결과 토스트 */}
+      {scanResult && (
+        <div className="mb-4 p-4 rounded-2xl flex items-center gap-3 fade-in"
+          style={{
+            background: scanResult.kind === 'success' ? '#DDF5EA' : scanResult.kind === 'warning' ? '#FFF3E0' : '#FFE4E4',
+            border: `2px solid ${scanResult.kind === 'success' ? '#3BC4A0' : scanResult.kind === 'warning' ? '#F57C00' : '#E74C3C'}`,
+          }}>
+          <span className="font-display text-base">{scanResult.message}</span>
+        </div>
+      )}
+
+      {tab === 'mission' && <MissionList user={user} booths={booths} myVisits={myVisits} myRewards={myRewards} onScanQr={() => setScanning(true)} />}
+      {tab === 'ranking' && <Ranking allScores={allScores} myStudentId={user.student_id} />}
       {tab === 'community' && <Community posts={posts} loading={loading} user={user}
         onSubmit={submitPost} onToggleLike={toggleLike} onAddComment={addComment} />}
+
+      {/* QR 스캐너 모달 */}
+      {scanning && <QrScannerModal onScan={handleQrScan} onClose={() => setScanning(false)} />}
     </main>
   );
 }
 
-function MissionList({ done, onToggle }) {
+function MissionList({ user, booths, myVisits, myRewards, onScanQr }) {
+  const subjectBooths = booths.filter(b => b.category === 'subject');
+  const seniorBooths = booths.filter(b => b.category === 'senior');
+  const visitedSubject = myVisits.filter(v => subjectBooths.some(b => b.code === v.booth_code));
+  const visitedSenior = myVisits.filter(v => seniorBooths.some(b => b.code === v.booth_code));
+  const simulationDone = myRewards.some(r => r.reward_type === 'simulation');
+  const postRewards = myRewards.filter(r => r.reward_type === 'post');
+
   return (
-    <div className="space-y-3">
-      {MISSIONS.map(m => {
-        const on = done.includes(m.id);
-        return (
-          <button key={m.id} onClick={() => onToggle(m.id)}
-            className="w-full p-5 rounded-2xl flex items-center gap-4 text-left transition-all"
-            style={{ background: on ? '#DDF5EA' : 'white', border: `1.5px solid ${on ? '#3BC4A0' : '#F0E6D2'}` }}>
-            <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: on ? '#3BC4A0' : '#FFFBF0', border: on ? 'none' : '2px solid #EADFC7' }}>
-              {on && <Check className="w-5 h-5 text-white" />}
-            </div>
-            <div className="flex-1">
-              <h4 className="font-display text-lg mb-0.5" style={{ textDecoration: on ? 'line-through' : 'none', opacity: on ? 0.7 : 1 }}>{m.title}</h4>
-              <p className="text-sm" style={{ color: '#6B7489' }}>{m.desc}</p>
-            </div>
-            <span className="text-sm font-bold px-2.5 py-1 rounded-full" style={{ background: on ? '#3BC4A0' : '#FFF0D6', color: on ? 'white' : '#B8852F' }}>+{m.points}P</span>
-          </button>
-        );
-      })}
+    <div className="space-y-4">
+      {/* QR 스캔 버튼 (항상 상단) */}
+      <button onClick={onScanQr}
+        className="w-full p-5 rounded-2xl flex items-center gap-4 transition hover:scale-[1.01]"
+        style={{
+          background: 'linear-gradient(135deg, #FF7A59, #FF5B8A)',
+          color: 'white',
+          boxShadow: '0 6px 16px rgba(255,122,89,0.3)'
+        }}>
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,255,255,0.22)' }}>
+          <QrCode className="w-6 h-6" />
+        </div>
+        <div className="flex-1 text-left">
+          <h4 className="font-display text-xl">부스 QR 스캔하기</h4>
+          <p className="text-sm opacity-90">과목별 부스 / 선배 부스에서 QR을 비추면 자동 적립</p>
+        </div>
+        <Camera className="w-5 h-5 opacity-80" />
+      </button>
+
+      {/* 미션 1: 과목별 부스 방문 */}
+      <MissionCard
+        icon={BookOpen} color="#FF7A59" bg="#FFE8E0"
+        title="과목별 부스 방문"
+        desc="과목 부스에서 QR을 스캔하면 1부스당 10P 적립"
+        progress={`${visitedSubject.length} / ${subjectBooths.length || '?'} 부스`}
+        points={visitedSubject.reduce((s, v) => s + v.points, 0)}
+        details={visitedSubject.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {visitedSubject.map(v => {
+              const b = subjectBooths.find(b => b.code === v.booth_code);
+              return (
+                <span key={v.booth_code} className="text-xs px-2 py-1 rounded-full inline-flex items-center gap-1"
+                  style={{ background: '#3BC4A0', color: 'white' }}>
+                  <Check className="w-3 h-3" /> {b?.name || v.booth_code}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      />
+
+      {/* 미션 2: 선배와의 만남 */}
+      <MissionCard
+        icon={Users} color="#2B7FFF" bg="#E0EDFF"
+        title="선배와의 만남"
+        desc="선배 부스에서 QR을 스캔하면 1부스당 10P 적립"
+        progress={`${visitedSenior.length} / ${seniorBooths.length || '?'} 부스`}
+        points={visitedSenior.reduce((s, v) => s + v.points, 0)}
+        details={visitedSenior.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {visitedSenior.map(v => {
+              const b = seniorBooths.find(b => b.code === v.booth_code);
+              return (
+                <span key={v.booth_code} className="text-xs px-2 py-1 rounded-full inline-flex items-center gap-1"
+                  style={{ background: '#3BC4A0', color: 'white' }}>
+                  <Check className="w-3 h-3" /> {b?.name || v.booth_code}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      />
+
+      {/* 미션 3: 시뮬레이션 완주 */}
+      <MissionCard
+        icon={Target} color="#A56BFF" bg="#F0E6FF"
+        title="과목 선택 시뮬레이션 완주"
+        desc="시뮬레이션을 끝까지 완료하면 자동 적립 (최초 1회 10P)"
+        progress={simulationDone ? '✅ 완료' : '미완료'}
+        points={simulationDone ? 10 : 0}
+        completed={simulationDone}
+      />
+
+      {/* 미션 4: 커뮤니티 활동 */}
+      <MissionCard
+        icon={MessageSquare} color="#3BC4A0" bg="#DDF5EA"
+        title="박람회 커뮤니티 활동"
+        desc="50자 이상 글을 남기면 글당 10P (최대 5회 50P)"
+        progress={`${postRewards.length} / 5 글`}
+        points={postRewards.reduce((s, r) => s + r.points, 0)}
+        completed={postRewards.length >= 5}
+      />
+
+      <div className="p-3 rounded-xl flex items-start gap-2 text-xs"
+        style={{ background: '#FFFBF0', color: '#6B7489', border: '1px solid #EADFC7' }}>
+        <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <span>
+          모든 포인트는 부정 적립을 막기 위해 자동·외부 인증 방식으로 적립됩니다.
+          QR 스캔은 부스 운영자에게서, 시뮬레이션은 완주 시, 커뮤니티는 50자 이상 작성 시 자동 적립.
+        </span>
+      </div>
     </div>
+  );
+}
+
+function MissionCard({ icon: Icon, color, bg, title, desc, progress, points, details, completed }) {
+  return (
+    <div className="p-5 rounded-2xl"
+      style={{
+        background: completed ? '#DDF5EA' : 'white',
+        border: `1.5px solid ${completed ? '#3BC4A0' : '#F0E6D2'}`
+      }}>
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center"
+          style={{ background: completed ? '#3BC4A0' : bg }}>
+          <Icon className="w-6 h-6" style={{ color: completed ? 'white' : color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 flex-wrap mb-1">
+            <h4 className="font-display text-lg">{title}</h4>
+            <span className="text-sm font-bold px-2.5 py-1 rounded-full whitespace-nowrap"
+              style={{ background: points > 0 ? '#FFC93C' : '#FFF0D6', color: points > 0 ? '#1B2541' : '#B8852F' }}>
+              +{points}P
+            </span>
+          </div>
+          <p className="text-sm mb-2" style={{ color: '#6B7489' }}>{desc}</p>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full inline-block"
+            style={{ background: '#FFFBF0', color: color, border: `1px solid ${color}33` }}>
+            {progress}
+          </span>
+          {details}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 실시간 랭킹 TOP 10
+function Ranking({ allScores, myStudentId }) {
+  const top10 = allScores.slice(0, 10);
+  const myEntry = allScores.find(s => s.student_id === myStudentId);
+  const myRank = allScores.findIndex(s => s.student_id === myStudentId);
+  const isMeInTop10 = myRank >= 0 && myRank < 10;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <Crown className="w-5 h-5" style={{ color: '#FFC93C' }} />
+        <h3 className="font-display text-xl">실시간 TOP 10</h3>
+        <span className="text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+          style={{ background: '#FFE4E4', color: '#E74C3C' }}>
+          <Flame className="w-3 h-3" /> LIVE
+        </span>
+      </div>
+
+      {top10.length === 0 ? (
+        <div className="p-10 text-center rounded-2xl" style={{ background: '#FFFBF0', border: '1.5px dashed #EADFC7' }}>
+          <Crown className="w-8 h-8 mx-auto mb-3" style={{ color: '#EADFC7' }} />
+          <p className="text-sm" style={{ color: '#8893A8' }}>아직 점수를 적립한 학생이 없어요.</p>
+          <p className="text-sm font-bold mt-1" style={{ color: '#FF7A59' }}>1등의 주인공이 되어보세요!</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {top10.map((entry, i) => {
+            const isMe = entry.student_id === myStudentId;
+            return <RankRow key={entry.student_id} rank={i + 1} entry={entry} isMe={isMe} />;
+          })}
+        </div>
+      )}
+
+      {/* 내가 TOP 10에 없으면 별도 표시 */}
+      {myEntry && !isMeInTop10 && (
+        <>
+          <div className="flex items-center gap-2 my-3">
+            <div className="flex-1 border-t border-dashed" style={{ borderColor: '#EADFC7' }} />
+            <span className="text-xs" style={{ color: '#8893A8' }}>...</span>
+            <div className="flex-1 border-t border-dashed" style={{ borderColor: '#EADFC7' }} />
+          </div>
+          <RankRow rank={myRank + 1} entry={myEntry} isMe={true} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function RankRow({ rank, entry, isMe }) {
+  const medalIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
+  return (
+    <div className="p-4 rounded-2xl flex items-center gap-3"
+      style={{
+        background: isMe ? '#FFF3E0' : 'white',
+        border: `1.5px solid ${isMe ? '#FFC93C' : '#F0E6D2'}`
+      }}>
+      <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-display"
+        style={{
+          background: rank <= 3 ? '#1B2541' : '#FFFBF0',
+          color: rank <= 3 ? '#FFC93C' : '#6B7489',
+          fontSize: medalIcon ? '20px' : '14px',
+        }}>
+        {medalIcon || rank}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-bold text-sm">{entry.nickname}</span>
+          <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>
+            {entry.student_id}
+          </span>
+          {isMe && <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#FFC93C', color: '#1B2541' }}>나</span>}
+        </div>
+      </div>
+      <div className="font-display flex items-baseline gap-0.5">
+        <span className="text-xl" style={{ color: '#FF7A59' }}>{entry.points}</span>
+        <span className="text-xs" style={{ color: '#8893A8' }}>P</span>
+      </div>
+    </div>
+  );
+}
+
+// QR 스캐너 모달
+function QrScannerModal({ onScan, onClose }) {
+  const containerId = 'qr-reader';
+  const scannerRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let scanner = null;
+
+    (async () => {
+      try {
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (!mounted) return;
+
+        scanner = new Html5Qrcode(containerId);
+        scannerRef.current = scanner;
+
+        await scanner.start(
+          { facingMode: 'environment' }, // 후면 카메라 우선
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (!mounted) return;
+            onScan(decodedText);
+          },
+          () => { /* 스캔 실패 무시 */ }
+        );
+      } catch (err) {
+        console.error('QR 스캐너 시작 실패:', err);
+        alert('카메라를 시작할 수 없어요. 권한을 확인하거나 다른 기기에서 시도해주세요.');
+        onClose();
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      if (scanner) {
+        scanner.stop().catch(() => {}).finally(() => {
+          try { scanner.clear(); } catch {}
+        });
+      }
+    };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background: 'rgba(27,37,65,0.85)', backdropFilter: 'blur(4px)' }}>
+      <div className="relative w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: 'white' }}>
+        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+          style={{ background: '#FFFBF0', borderBottom: '1.5px solid #F0E6D2' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#FF7A59' }}>
+              <QrCode className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-display text-lg leading-tight">부스 QR 스캔</h3>
+              <p className="text-xs" style={{ color: '#6B7489' }}>QR 코드를 화면 가운데에 비춰주세요</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+            style={{ color: '#6B7489' }} aria-label="닫기">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div id={containerId} style={{ width: '100%', minHeight: '320px' }} />
+        <div className="p-3 text-center text-xs" style={{ background: '#FFFBF0', color: '#6B7489' }}>
+          ⓘ 카메라 권한 허용이 필요해요. 학번당 부스당 1회만 적립됩니다.
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
 function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment }) {
   const composerRef = useRef(null);
   const [query, setQuery] = useState('');
+  const [showBest, setShowBest] = useState(true);
   const scrollToComposer = () => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // 베스트 게시글 TOP 10 (좋아요 1개 이상만)
+  const bestPosts = useMemo(() => {
+    return [...posts]
+      .filter(p => (p.likes || []).length > 0)
+      .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+      .slice(0, 10);
+  }, [posts]);
 
   const filteredPosts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1238,6 +1729,41 @@ function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment 
           <Plus className="w-3.5 h-3.5" /> 글 남기기
         </button>
       </div>
+
+      {/* 베스트 게시글 TOP 10 */}
+      {bestPosts.length > 0 && (
+        <div className="mb-5 rounded-2xl overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #FFF8E8, #FFE8E0)', border: '1.5px solid #FFC93C' }}>
+          <button onClick={() => setShowBest(s => !s)}
+            className="w-full px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Crown className="w-5 h-5" style={{ color: '#B8852F' }} />
+              <span className="font-display text-base">베스트 글 TOP 10</span>
+              <span className="text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                style={{ background: '#FFE4E4', color: '#E74C3C' }}>
+                <Flame className="w-3 h-3" /> LIVE
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 transition-transform"
+              style={{ color: '#B8852F', transform: showBest ? 'rotate(90deg)' : 'rotate(0deg)' }} />
+          </button>
+          {showBest && (
+            <div className="px-4 pb-4 space-y-2">
+              <p className="text-xs mb-3" style={{ color: '#6B7489' }}>가장 많은 추천을 받은 글이에요. 클릭하면 글로 이동해요.</p>
+              {bestPosts.map((p, i) => (
+                <BestPostRow key={p.id} rank={i + 1} post={p}
+                  onClick={() => {
+                    setQuery('');
+                    setTimeout(() => {
+                      const el = document.getElementById(`post-${p.id}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                  }} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 검색바 */}
       <div className="mb-4 relative">
@@ -1329,7 +1855,7 @@ function PostCard({ post, user, highlight, onToggleLike, onAddComment }) {
   const showCommentsEffective = showComments || hasMatchingComment;
 
   return (
-    <article className="p-4 rounded-2xl transition-colors"
+    <article id={`post-${post.id}`} className="p-4 rounded-2xl transition-colors"
       style={{ background: 'white', border: `1.5px solid ${isMine ? '#FFC93C55' : '#F0E6D2'}` }}>
       <div className="flex gap-3">
         <Avatar name={post.nickname} />
@@ -1403,6 +1929,41 @@ function PostCard({ post, user, highlight, onToggleLike, onAddComment }) {
 }
 
 // 검색어를 노란색으로 강조 표시하는 헬퍼 컴포넌트
+// 베스트 게시글 한 줄
+function BestPostRow({ rank, post, onClick }) {
+  const medalIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
+  const preview = (post.content || '').slice(0, 60).replace(/\n/g, ' ');
+  return (
+    <button onClick={onClick}
+      className="w-full p-3 rounded-xl flex items-center gap-3 transition hover:scale-[1.01] text-left"
+      style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,201,60,0.3)' }}>
+      <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-display text-sm"
+        style={{
+          background: rank <= 3 ? '#1B2541' : '#FFFBF0',
+          color: rank <= 3 ? '#FFC93C' : '#6B7489',
+          fontSize: medalIcon ? '16px' : '13px',
+        }}>
+        {medalIcon || rank}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+          <span className="font-bold text-xs">{post.nickname}</span>
+          {post.student_id && (
+            <span className="text-[10px] px-1 rounded" style={{ background: '#FFFBF0', color: '#8893A8' }}>
+              {post.student_id}
+            </span>
+          )}
+        </div>
+        <p className="text-xs truncate" style={{ color: '#4A5568' }}>{preview}{post.content?.length > 60 ? '...' : ''}</p>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0" style={{ color: '#FF5B8A' }}>
+        <ThumbsUp className="w-3.5 h-3.5" fill="#FF5B8A" />
+        <span className="font-bold text-sm">{post.likes?.length || 0}</span>
+      </div>
+    </button>
+  );
+}
+
 function Highlighted({ text, highlight }) {
   if (!text) return null;
   if (!highlight || !highlight.trim()) return <>{text}</>;
