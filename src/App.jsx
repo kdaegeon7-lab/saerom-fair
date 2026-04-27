@@ -5,7 +5,7 @@ import {
   Users, Compass, Lightbulb, Globe, GraduationCap, Target, Heart,
   Send, Clock, Award, ChevronRight, RefreshCw, AlertCircle, MapPin,
   ThumbsUp, MessageCircle, FileText, X, LogIn, LogOut, User,
-  Lock, Hash, Briefcase, ShieldCheck
+  Lock, Hash, Briefcase, ShieldCheck, Search
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
 
@@ -1204,17 +1204,66 @@ function MissionList({ done, onToggle }) {
 
 function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment }) {
   const composerRef = useRef(null);
+  const [query, setQuery] = useState('');
   const scrollToComposer = () => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  const filteredPosts = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return posts;
+    return posts.filter(p => {
+      const inPost =
+        (p.nickname || '').toLowerCase().includes(q) ||
+        (p.student_id || '').toLowerCase().includes(q) ||
+        (p.content || '').toLowerCase().includes(q);
+      if (inPost) return true;
+      // 댓글에서도 검색
+      const inComments = (p.comments || []).some(c =>
+        (c.nickname || '').toLowerCase().includes(q) ||
+        (c.student_id || '').toLowerCase().includes(q) ||
+        (c.content || '').toLowerCase().includes(q)
+      );
+      return inComments;
+    });
+  }, [posts, query]);
+
+  const isSearching = query.trim().length > 0;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display text-xl">💬 모두의 이야기</h3>
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <h3 className="font-display text-xl whitespace-nowrap">💬 모두의 이야기</h3>
         <button onClick={scrollToComposer}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition hover:scale-105"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold transition hover:scale-105 flex-shrink-0"
           style={{ background: '#FF7A59', color: 'white' }}>
           <Plus className="w-3.5 h-3.5" /> 글 남기기
         </button>
+      </div>
+
+      {/* 검색바 */}
+      <div className="mb-4 relative">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-full transition-all"
+          style={{ background: 'white', border: `1.5px solid ${isSearching ? '#FF7A59' : '#EADFC7'}` }}>
+          <Search className="w-4 h-4 flex-shrink-0" style={{ color: isSearching ? '#FF7A59' : '#8893A8' }} />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="닉네임·학번·내용으로 검색"
+            className="flex-1 text-sm outline-none bg-transparent"
+            style={{ color: '#1B2541' }}
+          />
+          {isSearching && (
+            <button onClick={() => setQuery('')}
+              className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-100 flex-shrink-0"
+              style={{ color: '#8893A8' }} aria-label="검색 지우기">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        {isSearching && (
+          <p className="text-xs mt-2 px-2" style={{ color: '#6B7489' }}>
+            "<span className="font-bold" style={{ color: '#FF7A59' }}>{query.trim()}</span>" 검색 결과 {filteredPosts.length}건
+          </p>
+        )}
       </div>
 
       <div className="space-y-3 mb-10">
@@ -1226,8 +1275,14 @@ function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment 
             <p className="text-sm font-bold" style={{ color: '#FF7A59' }}>첫 글의 주인공이 되어보세요!</p>
           </div>
         )}
-        {posts.map(p => (
-          <PostCard key={p.id} post={p} user={user}
+        {!loading && posts.length > 0 && filteredPosts.length === 0 && (
+          <div className="p-8 text-center rounded-2xl" style={{ background: '#FFFBF0', border: '1.5px dashed #EADFC7' }}>
+            <Search className="w-7 h-7 mx-auto mb-3" style={{ color: '#EADFC7' }} />
+            <p className="text-sm" style={{ color: '#8893A8' }}>일치하는 글이나 댓글이 없어요.</p>
+          </div>
+        )}
+        {filteredPosts.map(p => (
+          <PostCard key={p.id} post={p} user={user} highlight={query.trim()}
             onToggleLike={onToggleLike} onAddComment={onAddComment} />
         ))}
       </div>
@@ -1257,13 +1312,21 @@ function Avatar({ name, size = 40 }) {
   );
 }
 
-function PostCard({ post, user, onToggleLike, onAddComment }) {
+function PostCard({ post, user, highlight, onToggleLike, onAddComment }) {
   const [showComments, setShowComments] = useState(false);
   const likes = post.likes || [];
   const comments = post.comments || [];
   const hasLiked = user && likes.includes(user.student_id);
   const time = new Date(post.created_at).getTime();
   const isMine = user && post.student_id === user.student_id;
+
+  // 검색 시 댓글에 매칭되는 게 있으면 자동으로 댓글 펼침
+  const hasMatchingComment = highlight && comments.some(c =>
+    (c.nickname || '').toLowerCase().includes(highlight.toLowerCase()) ||
+    (c.student_id || '').toLowerCase().includes(highlight.toLowerCase()) ||
+    (c.content || '').toLowerCase().includes(highlight.toLowerCase())
+  );
+  const showCommentsEffective = showComments || hasMatchingComment;
 
   return (
     <article className="p-4 rounded-2xl transition-colors"
@@ -1272,13 +1335,19 @@ function PostCard({ post, user, onToggleLike, onAddComment }) {
         <Avatar name={post.nickname} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className="font-bold text-sm" style={{ color: '#1B2541' }}>{post.nickname}</span>
-            {post.student_id && <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>{post.student_id}</span>}
+            <span className="font-bold text-sm" style={{ color: '#1B2541' }}>
+              <Highlighted text={post.nickname} highlight={highlight} />
+            </span>
+            {post.student_id && (
+              <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>
+                <Highlighted text={post.student_id} highlight={highlight} />
+              </span>
+            )}
             {isMine && <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
             <span className="text-xs" style={{ color: '#8893A8' }}>· {formatTime(time)}</span>
           </div>
           <p className="text-[15px] whitespace-pre-wrap break-words mb-3" style={{ color: '#1B2541', lineHeight: 1.55 }}>
-            {post.content}
+            <Highlighted text={post.content} highlight={highlight} />
           </p>
           <div className="flex items-center gap-1 -ml-2">
             <button onClick={() => onToggleLike(post.id)}
@@ -1290,13 +1359,13 @@ function PostCard({ post, user, onToggleLike, onAddComment }) {
             </button>
             <button onClick={() => setShowComments(s => !s)}
               className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs transition-all"
-              style={{ color: showComments ? '#2B7FFF' : '#8893A8', fontWeight: showComments ? 700 : 400 }}>
-              <MessageCircle className="w-4 h-4" strokeWidth={showComments ? 2.2 : 1.8} />
+              style={{ color: showCommentsEffective ? '#2B7FFF' : '#8893A8', fontWeight: showCommentsEffective ? 700 : 400 }}>
+              <MessageCircle className="w-4 h-4" strokeWidth={showCommentsEffective ? 2.2 : 1.8} />
               <span>{comments.length > 0 ? comments.length : ''}</span>
             </button>
           </div>
 
-          {showComments && (
+          {showCommentsEffective && (
             <div className="mt-3 pt-3 border-t" style={{ borderColor: '#F0E6D2' }}>
               {comments.map(c => {
                 const ct = new Date(c.created_at).getTime();
@@ -1306,13 +1375,19 @@ function PostCard({ post, user, onToggleLike, onAddComment }) {
                     <Avatar name={c.nickname} size={28} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-xs" style={{ color: '#1B2541' }}>{c.nickname}</span>
-                        {c.student_id && <span className="text-[10px] px-1 rounded" style={{ background: '#FFFBF0', color: '#8893A8' }}>{c.student_id}</span>}
+                        <span className="font-bold text-xs" style={{ color: '#1B2541' }}>
+                          <Highlighted text={c.nickname} highlight={highlight} />
+                        </span>
+                        {c.student_id && (
+                          <span className="text-[10px] px-1 rounded" style={{ background: '#FFFBF0', color: '#8893A8' }}>
+                            <Highlighted text={c.student_id} highlight={highlight} />
+                          </span>
+                        )}
                         {cIsMine && <span className="text-[10px] px-1 rounded font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
                         <span className="text-[11px]" style={{ color: '#8893A8' }}>· {formatTime(ct)}</span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap break-words mt-0.5" style={{ color: '#1B2541', lineHeight: 1.5 }}>
-                        {c.content}
+                        <Highlighted text={c.content} highlight={highlight} />
                       </p>
                     </div>
                   </div>
@@ -1324,6 +1399,25 @@ function PostCard({ post, user, onToggleLike, onAddComment }) {
         </div>
       </div>
     </article>
+  );
+}
+
+// 검색어를 노란색으로 강조 표시하는 헬퍼 컴포넌트
+function Highlighted({ text, highlight }) {
+  if (!text) return null;
+  if (!highlight || !highlight.trim()) return <>{text}</>;
+  const q = highlight.trim();
+  // 대소문자 무시 매칭. 정규식 특수문자 이스케이프
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = String(text).split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase()
+          ? <mark key={i} style={{ background: '#FFE082', color: '#1B2541', padding: '0 2px', borderRadius: '3px' }}>{part}</mark>
+          : <React.Fragment key={i}>{part}</React.Fragment>
+      )}
+    </>
   );
 }
 
