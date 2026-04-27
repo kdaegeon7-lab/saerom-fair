@@ -1355,7 +1355,7 @@ function Fair({ onBack, user }) {
       <div className="flex gap-2 mb-6">
         {[
           { k: 'mission', label: '미션', icon: Trophy },
-          { k: 'ranking', label: '실시간 TOP 10', icon: Crown },
+          { k: 'ranking', label: '미션 실시간 TOP 10', icon: Crown },
           { k: 'community', label: '커뮤니티', icon: MessageSquare },
         ].map(t => {
           const Icon = t.icon;
@@ -1539,7 +1539,7 @@ function Ranking({ allScores, myStudentId }) {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <Crown className="w-5 h-5" style={{ color: '#FFC93C' }} />
-        <h3 className="font-display text-xl">실시간 TOP 10</h3>
+        <h3 className="font-display text-xl">미션 실시간 TOP 10</h3>
         <span className="text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1"
           style={{ background: '#FFE4E4', color: '#E74C3C' }}>
           <Flame className="w-3 h-3" /> LIVE
