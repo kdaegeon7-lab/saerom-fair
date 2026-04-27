@@ -4,12 +4,11 @@ import {
   BookOpen, Sparkles, Trophy, ArrowLeft, Plus, Check, MessageSquare,
   Users, Compass, Lightbulb, Globe, GraduationCap, Target, Heart,
   Send, Clock, Award, ChevronRight, RefreshCw, AlertCircle, MapPin,
-  ThumbsUp, MessageCircle, FileText, X
+  ThumbsUp, MessageCircle, FileText, X, LogIn, LogOut, User,
+  Lock, Hash, Briefcase, ShieldCheck
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
 
-// ============ 과목별 안내자료 PDF 매핑 ============
-// Supabase Storage의 subject-guides 버킷에 업로드된 PDF 파일명
 const SUBJECT_PDFS = {
   '주제 탐구 독서': 'topic-inquiry-reading.pdf',
   '문학과 영상': 'literature-and-media.pdf',
@@ -97,7 +96,14 @@ function getSubjectPdfUrl(subjectName) {
   return `${supabaseUrl}/storage/v1/object/public/subject-guides/${fname}`;
 }
 
-// ============ 편성표 데이터 ============
+async function hashPassword(password) {
+  const enc = new TextEncoder().encode(password);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 const CHOICE_GROUPS = [
   { id: 1, grade: 2, semester: 1, nChoose: 3, perCredit: 4, subjects: [
     { name: '세계시민과 지리', group: '사회', type: '일반선택' },
@@ -231,26 +237,45 @@ const MISSIONS = [
   { id: 'm5', title: '진로상담 부스 방문', desc: '진로상담 부스에서 1회 이상 상담받기', points: 15 },
 ];
 
-// ========== localStorage 헬퍼 (개인 상태용) ==========
 const ls = {
   get: (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  remove: (k) => { try { localStorage.removeItem(k); } catch {} },
 };
-
-function getOrCreateUserId() {
-  let id = ls.get('my_user_id');
-  if (!id) {
-    id = 'u_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-    ls.set('my_user_id', id);
-  }
-  return id;
-}
 
 export default function App() {
   const [page, setPage] = useState('home');
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  useEffect(() => {
+    const saved = ls.get('current_user');
+    if (saved && saved.student_id) {
+      setUser(saved);
+    }
+    setAuthChecking(false);
+  }, []);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    ls.set('current_user', userData);
+  };
+
+  const handleLogout = () => {
+    if (!confirm('로그아웃 하시겠어요? 미션 진행 상황은 그대로 유지됩니다.')) return;
+    setUser(null);
+    ls.remove('current_user');
+    setPage('home');
+  };
+
+  if (authChecking) return null;
+
+  if (!user) {
+    return <AuthScreen onLogin={handleLogin} />;
+  }
 
   return (
-    <div className="min-h-screen" style={{ background: '#FFFBF0', color: '#1B2541' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: '#FFFBF0', color: '#1B2541' }}>
       <style>{`
         .wiggle:hover { animation: wiggle 0.4s ease-in-out; }
         @keyframes wiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-1.2deg); } 75% { transform: rotate(1.2deg); } }
@@ -262,12 +287,12 @@ export default function App() {
 
       {!isSupabaseConfigured && <SupabaseWarning />}
 
-      <Header onHome={() => setPage('home')} page={page} />
-      <div className="fade-in">
-        {page === 'home' && <Home onNavigate={setPage} />}
+      <Header onHome={() => setPage('home')} page={page} user={user} onLogout={handleLogout} />
+      <div className="fade-in flex-1">
+        {page === 'home' && <Home onNavigate={setPage} user={user} />}
         {page === 'simulation' && <Simulation onBack={() => setPage('home')} />}
         {page === 'programs' && <Programs onBack={() => setPage('home')} />}
-        {page === 'fair' && <Fair onBack={() => setPage('home')} />}
+        {page === 'fair' && <Fair onBack={() => setPage('home')} user={user} />}
       </div>
       <Footer />
     </div>
@@ -277,26 +302,51 @@ export default function App() {
 function SupabaseWarning() {
   return (
     <div className="p-3 text-center text-sm" style={{ background: '#FFF3E0', color: '#B8852F', borderBottom: '1px solid #FFC93C' }}>
-      ⚠️ Supabase 환경변수가 설정되지 않아 커뮤니티가 임시 저장 상태로 동작합니다. 배포 가이드의 환경변수 설정 단계를 확인하세요.
+      ⚠️ Supabase 환경변수가 설정되지 않아 일부 기능이 제한됩니다.
     </div>
   );
 }
 
-function Header({ onHome, page }) {
+function Header({ onHome, page, user, onLogout }) {
   return (
-    <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: 'rgba(255,251,240,0.85)', borderBottom: '1px solid #F0E6D2' }}>
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-        <button onClick={onHome} className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#FF7A59' }}>
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-display text-xl" style={{ color: '#1B2541' }}>새롬고 교육과정 박람회</span>
+    <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: 'rgba(255,251,240,0.9)', borderBottom: '1px solid #F0E6D2' }}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <button onClick={onHome} className="flex items-center gap-2 min-w-0">
+          <img src="/saerom-logo.png" alt="새롬고" className="w-9 h-9 flex-shrink-0" />
+          <span className="font-display text-base sm:text-xl truncate" style={{ color: '#1B2541' }}>
+            새롬고 교육과정 박람회
+          </span>
         </button>
-        {page !== 'home' && (
-          <button onClick={onHome} className="text-sm px-3 py-1.5 rounded-full hover:bg-white transition" style={{ color: '#6B7489' }}>
-            홈으로
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: '#FFF3E0', border: '1.5px solid #FFC93C' }}>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
+              style={{ background: avatarColor(user.nickname) }}>
+              {user.nickname.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="text-xs leading-tight">
+              <div className="font-bold" style={{ color: '#1B2541' }}>{user.nickname}</div>
+              <div style={{ color: '#8893A8' }}>{user.student_id}</div>
+            </div>
+          </div>
+          <div className="sm:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: '#FFF3E0', border: '1.5px solid #FFC93C' }}>
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+              style={{ background: avatarColor(user.nickname) }}>
+              {user.nickname.slice(0, 1).toUpperCase()}
+            </div>
+            <span className="text-[11px] font-bold" style={{ color: '#1B2541' }}>{user.nickname}</span>
+          </div>
+          {page !== 'home' && (
+            <button onClick={onHome} className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-full hover:bg-white transition" style={{ color: '#6B7489' }}>
+              홈으로
+            </button>
+          )}
+          <button onClick={onLogout} title="로그아웃"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center hover:bg-white transition"
+            style={{ color: '#6B7489' }}>
+            <LogOut className="w-4 h-4" />
           </button>
-        )}
+        </div>
       </div>
     </header>
   );
@@ -304,8 +354,14 @@ function Header({ onHome, page }) {
 
 function Footer() {
   return (
-    <footer className="mt-24 py-10 text-center text-sm" style={{ color: '#8893A8' }}>
-      <p>© 2026 새롬고등학교 교육과정 박람회 · 수학과학중점과정 기준</p>
+    <footer className="mt-auto py-8 text-center" style={{ background: '#1B2541', color: '#FFFBF0' }}>
+      <div className="max-w-6xl mx-auto px-6">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <img src="/saerom-logo.png" alt="새롬고" className="w-7 h-7 opacity-90" />
+          <span className="font-display text-base">새롬고등학교 교육과정 박람회</span>
+        </div>
+        <p className="text-xs opacity-70">© 2026 새롬고등학교 교육과정부 (김대건) · All rights reserved.</p>
+      </div>
     </footer>
   );
 }
@@ -318,7 +374,263 @@ function BackButton({ onBack, label }) {
   );
 }
 
-function Home({ onNavigate }) {
+function AuthScreen({ onLogin }) {
+  const [mode, setMode] = useState('login');
+  const [studentId, setStudentId] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [password, setPassword] = useState('');
+  const [careerPaths, setCareerPaths] = useState(['']);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const updateCareer = (idx, val) => {
+    setCareerPaths(prev => prev.map((p, i) => i === idx ? val : p));
+  };
+  const addCareer = () => {
+    if (careerPaths.length >= 5) return;
+    setCareerPaths(prev => [...prev, '']);
+  };
+  const removeCareer = (idx) => {
+    setCareerPaths(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
+  };
+
+  const handleLogin = async () => {
+    setError('');
+    if (!studentId.trim()) return setError('학번을 입력해주세요.');
+    if (!/^\d{4}$/.test(password)) return setError('비밀번호는 숫자 4자리예요.');
+    if (!isSupabaseConfigured) return setError('서버 연결 오류. 새로고침 후 다시 시도해주세요.');
+
+    setLoading(true);
+    try {
+      const hash = await hashPassword(password);
+      const { data, error: e } = await supabase
+        .from('students').select('*')
+        .eq('student_id', studentId.trim())
+        .maybeSingle();
+      if (e) throw e;
+      if (!data) {
+        setError('등록되지 않은 학번이에요. 처음이라면 [신규 등록]을 눌러주세요.');
+        return;
+      }
+      if (data.password_hash !== hash) {
+        setError('비밀번호가 일치하지 않아요.');
+        return;
+      }
+      supabase.from('students').update({ last_login_at: new Date().toISOString() })
+        .eq('student_id', studentId.trim()).then(() => {});
+
+      onLogin({
+        student_id: data.student_id,
+        nickname: data.nickname,
+        career_paths: data.career_paths || [],
+      });
+    } catch (err) {
+      setError('로그인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    setError('');
+    const sid = studentId.trim();
+    const nick = nickname.trim();
+    const careers = careerPaths.map(c => c.trim()).filter(Boolean);
+
+    if (!/^\d+$/.test(sid)) return setError('학번은 숫자로 입력해주세요.');
+    if (sid.length < 4 || sid.length > 6) return setError('학번을 다시 확인해주세요. (4~6자리)');
+    if (!nick) return setError('닉네임을 입력해주세요.');
+    if (nick.length > 20) return setError('닉네임은 20자 이내로 해주세요.');
+    if (!/^\d{4}$/.test(password)) return setError('비밀번호는 숫자 4자리로 만들어주세요.');
+    if (careers.length === 0) return setError('희망 진로/학과를 1개 이상 입력해주세요.');
+    if (!isSupabaseConfigured) return setError('서버 연결 오류. 새로고침 후 다시 시도해주세요.');
+
+    setLoading(true);
+    try {
+      const { data: existing } = await supabase.from('students')
+        .select('student_id').eq('student_id', sid).maybeSingle();
+      if (existing) {
+        setError('이미 등록된 학번이에요. [기존 사용자]로 로그인해주세요.');
+        return;
+      }
+      const { data: nickExists } = await supabase.from('students')
+        .select('student_id').eq('nickname', nick).maybeSingle();
+      if (nickExists) {
+        setError('이미 사용 중인 닉네임이에요. 다른 닉네임을 정해주세요.');
+        return;
+      }
+
+      const hash = await hashPassword(password);
+      const { error: insErr } = await supabase.from('students').insert({
+        student_id: sid,
+        nickname: nick,
+        password_hash: hash,
+        career_paths: careers,
+      });
+      if (insErr) throw insErr;
+
+      onLogin({ student_id: sid, nickname: nick, career_paths: careers });
+    } catch (err) {
+      setError('등록 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{
+      background: 'linear-gradient(135deg, #FFFBF0 0%, #FFF3E0 100%)'
+    }}>
+      <main className="flex-1 flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md fade-in">
+          <style>{`
+            .fade-in { animation: fadeIn 0.5s ease-out both; }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+          `}</style>
+
+          <div className="text-center mb-7">
+            <img src="/saerom-logo.png" alt="새롬고" className="w-24 h-24 mx-auto mb-4 drop-shadow-md" />
+            <h1 className="font-display text-3xl mb-1" style={{ color: '#1B2541' }}>
+              새롬고 교육과정 박람회
+            </h1>
+            <p className="text-sm" style={{ color: '#6B7489' }}>입장하려면 학번으로 인증해주세요</p>
+          </div>
+
+          <div className="rounded-3xl p-6 sm:p-7 shadow-lg" style={{ background: 'white', border: '1.5px solid #F0E6D2' }}>
+            <div className="flex gap-2 p-1 rounded-full mb-6" style={{ background: '#FFFBF0' }}>
+              <button onClick={() => { setMode('login'); setError(''); }}
+                className="flex-1 py-2 rounded-full text-sm font-bold transition"
+                style={{
+                  background: mode === 'login' ? '#FF7A59' : 'transparent',
+                  color: mode === 'login' ? 'white' : '#6B7489',
+                }}>
+                기존 사용자
+              </button>
+              <button onClick={() => { setMode('signup'); setError(''); }}
+                className="flex-1 py-2 rounded-full text-sm font-bold transition"
+                style={{
+                  background: mode === 'signup' ? '#2B7FFF' : 'transparent',
+                  color: mode === 'signup' ? 'white' : '#6B7489',
+                }}>
+                신규 등록
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              <Field icon={Hash} label="학번" hint="예: 20301">
+                <input type="tel" inputMode="numeric" value={studentId}
+                  onChange={e => setStudentId(e.target.value.replace(/[^0-9]/g, ''))}
+                  maxLength={6} placeholder="학번 4~6자리"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none focus:ring-2"
+                  style={{ background: '#FFFBF0', border: '1.5px solid #EADFC7' }} />
+              </Field>
+
+              {mode === 'signup' && (
+                <>
+                  <Field icon={User} label="닉네임" hint="커뮤니티에서 표시될 이름 (20자 이내)">
+                    <input type="text" value={nickname} onChange={e => setNickname(e.target.value)}
+                      maxLength={20} placeholder="닉네임"
+                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none focus:ring-2"
+                      style={{ background: '#FFFBF0', border: '1.5px solid #EADFC7' }} />
+                  </Field>
+
+                  <Field icon={Briefcase} label="희망 진로/학과" hint="여러 개 가능 (최대 5개)">
+                    <div className="space-y-2">
+                      {careerPaths.map((c, i) => (
+                        <div key={i} className="flex gap-2">
+                          <input type="text" value={c}
+                            onChange={e => updateCareer(i, e.target.value)}
+                            maxLength={30}
+                            placeholder={i === 0 ? '예: 의학' : '예: 컴퓨터공학'}
+                            className="flex-1 px-3 py-2 rounded-xl text-sm outline-none focus:ring-2"
+                            style={{ background: '#FFFBF0', border: '1.5px solid #EADFC7' }} />
+                          {careerPaths.length > 1 && (
+                            <button type="button" onClick={() => removeCareer(i)}
+                              className="w-9 h-9 flex items-center justify-center rounded-xl flex-shrink-0"
+                              style={{ background: '#FFE8E0', color: '#FF5B8A' }}>
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {careerPaths.length < 5 && (
+                        <button type="button" onClick={addCareer}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold"
+                          style={{ background: '#E0EDFF', color: '#2B7FFF' }}>
+                          <Plus className="w-3.5 h-3.5" /> 추가
+                        </button>
+                      )}
+                    </div>
+                  </Field>
+                </>
+              )}
+
+              <Field icon={Lock} label="비밀번호" hint={mode === 'signup' ? '숫자 4자리로 직접 만들어주세요' : '입장할 때 사용하는 4자리 숫자'}>
+                <input type="password" inputMode="numeric"
+                  value={password}
+                  onChange={e => setPassword(e.target.value.replace(/[^0-9]/g, ''))}
+                  maxLength={4} placeholder="0000"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none focus:ring-2 tracking-[0.5em] text-center"
+                  style={{ background: '#FFFBF0', border: '1.5px solid #EADFC7' }} />
+              </Field>
+
+              {error && (
+                <div className="p-3 rounded-xl text-sm flex items-start gap-2"
+                  style={{ background: '#FFE8E0', color: '#C73E2A' }}>
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <button onClick={mode === 'login' ? handleLogin : handleSignup} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+                style={{
+                  background: mode === 'login' ? 'linear-gradient(135deg, #FF7A59, #FF5B8A)' : 'linear-gradient(135deg, #2B7FFF, #6BB8FF)',
+                  color: 'white',
+                  opacity: loading ? 0.6 : 1,
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.1)'
+                }}>
+                {loading ? '처리 중...' : (
+                  <>
+                    {mode === 'login' ? <LogIn className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                    {mode === 'login' ? '입장하기' : '등록하고 입장하기'}
+                  </>
+                )}
+              </button>
+
+              {mode === 'login' && (
+                <p className="text-xs text-center pt-1" style={{ color: '#8893A8' }}>
+                  처음 방문이라면 위에서 <b style={{ color: '#2B7FFF' }}>신규 등록</b>을 선택해주세요.
+                </p>
+              )}
+              {mode === 'signup' && (
+                <p className="text-xs text-center pt-1" style={{ color: '#8893A8' }}>
+                  비밀번호는 잊어버리지 않게 꼭 기억해주세요!
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+function Field({ icon: Icon, label, hint, children }) {
+  return (
+    <div>
+      <label className="flex items-center gap-1.5 text-xs font-bold mb-1.5" style={{ color: '#1B2541' }}>
+        <Icon className="w-3.5 h-3.5" style={{ color: '#FF7A59' }} />
+        {label}
+        {hint && <span className="font-normal text-[11px]" style={{ color: '#8893A8' }}>· {hint}</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function Home({ onNavigate, user }) {
   const cards = [
     { key: 'simulation', icon: BookOpen, color: '#FF7A59', bg: '#FFE8E0', title: '과목 선택 시뮬레이션', desc: '학년별 편성표 기준으로\n실제 선택 묶음을 미리 체험해요.', cta: '지금 체험하기' },
     { key: 'programs', icon: Sparkles, color: '#2B7FFF', bg: '#E0EDFF', title: '학교 특색 프로그램', desc: '수학과학중점·디지털 혁신 등\n우리 학교 특색 한눈에.', cta: '프로그램 보기' },
@@ -326,20 +638,20 @@ function Home({ onNavigate }) {
   ];
 
   return (
-    <main className="max-w-6xl mx-auto px-6 pt-12 pb-8">
-      <section className="relative mb-16">
+    <main className="max-w-6xl mx-auto px-6 pt-10 pb-8">
+      <section className="relative mb-12">
         <div className="absolute -top-4 left-8 w-16 h-16 rounded-full opacity-60" style={{ background: '#FFC93C' }} />
         <div className="absolute top-20 right-10 w-24 h-24 rounded-full opacity-40" style={{ background: '#3BC4A0' }} />
         <div className="absolute top-8 right-40 w-10 h-10 rounded-full opacity-50" style={{ background: '#FF5B8A' }} />
         <div className="relative">
-          <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-5" style={{ background: '#1B2541', color: '#FFC93C' }}>
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-4" style={{ background: '#1B2541', color: '#FFC93C' }}>
             2026 새롬고 교육과정 박람회
           </span>
-          <h1 className="font-display text-5xl md:text-6xl leading-tight mb-4">
-            내 선택이 만드는<br />
-            <span style={{ color: '#FF7A59' }}>진짜 나의 고등학교</span>
+          <h1 className="font-display text-4xl md:text-6xl leading-tight mb-3">
+            <span style={{ color: '#FF7A59' }}>{user.nickname}</span>님,<br/>
+            오늘의 진로 여정을 시작해볼까요?
           </h1>
-          <p className="text-lg max-w-xl" style={{ color: '#4A5568' }}>
+          <p className="text-base md:text-lg max-w-xl" style={{ color: '#4A5568' }}>
             선택과목이 고민이라면, 특색 프로그램이 궁금하다면,<br />
             박람회 미션을 놓치고 싶지 않다면 — 여기서 시작하세요.
           </p>
@@ -391,7 +703,6 @@ function Home({ onNavigate }) {
   );
 }
 
-// ============ 시뮬레이션 ============
 function Simulation({ onBack }) {
   const [cohort, setCohort] = useState(null);
   const [selected, setSelected] = useState({});
@@ -612,7 +923,6 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
           return (
             <div key={s.name} className="inline-flex items-stretch rounded-xl overflow-hidden"
               style={{ border: `1.5px solid ${on ? groupColor : '#EADFC7'}` }}>
-              {/* 과목 선택 버튼 */}
               <button onClick={() => onToggle(group.id, s.name, group)} disabled={disabled}
                 className="px-3 py-2 text-sm transition-all"
                 style={{
@@ -635,7 +945,6 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
                   {s.sci && <span className="text-[10px]" title="과학중점">🔬</span>}
                 </span>
               </button>
-              {/* 안내자료 버튼 */}
               {hasPdf && (
                 <button onClick={() => setPdfSubject(s.name)}
                   title={`${s.name} 안내자료 보기`}
@@ -658,11 +967,9 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
   );
 }
 
-// ============ PDF 안내자료 모달 ============
 function PdfModal({ subject, onClose }) {
   const url = getSubjectPdfUrl(subject);
 
-  // ESC 키로 닫기
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -682,7 +989,6 @@ function PdfModal({ subject, onClose }) {
       <div className="relative w-full max-w-4xl h-[90vh] rounded-2xl overflow-hidden flex flex-col"
         style={{ background: 'white' }}
         onClick={e => e.stopPropagation()}>
-        {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-3 flex-shrink-0"
           style={{ background: '#FFFBF0', borderBottom: '1.5px solid #F0E6D2' }}>
           <div className="flex items-center gap-2.5 min-w-0">
@@ -708,7 +1014,6 @@ function PdfModal({ subject, onClose }) {
             </button>
           </div>
         </div>
-        {/* PDF 뷰어 */}
         <div className="flex-1 bg-gray-100 overflow-hidden">
           <iframe src={url} title={`${subject} 안내자료`}
             className="w-full h-full" style={{ border: 'none' }} />
@@ -719,7 +1024,6 @@ function PdfModal({ subject, onClose }) {
   );
 }
 
-// ============ 특색 프로그램 ============
 function Programs({ onBack }) {
   return (
     <main className="max-w-6xl mx-auto px-6 pt-8 pb-8">
@@ -756,17 +1060,14 @@ function Programs({ onBack }) {
   );
 }
 
-// ============ 박람회 미션 & 커뮤니티 (Supabase 연동) ============
-function Fair({ onBack }) {
+function Fair({ onBack, user }) {
   const [tab, setTab] = useState('mission');
   const [done, setDone] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const userId = useMemo(() => getOrCreateUserId(), []);
 
-  // 초기 로드 + 실시간 구독
   useEffect(() => {
-    setDone(ls.get('missions_done') || []);
+    setDone(ls.get(`missions_${user.student_id}`) || []);
 
     if (!isSupabaseConfigured) { setLoading(false); return; }
 
@@ -786,7 +1087,6 @@ function Fair({ onBack }) {
     };
     load();
 
-    // 실시간 구독: 글/좋아요/댓글 변경 시 자동 새로고침
     const channel = supabase.channel('posts-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_likes' }, load)
@@ -794,33 +1094,42 @@ function Fair({ onBack }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [user.student_id]);
 
   const toggleMission = (id) => {
     const next = done.includes(id) ? done.filter(x => x !== id) : [...done, id];
     setDone(next);
-    ls.set('missions_done', next);
+    ls.set(`missions_${user.student_id}`, next);
   };
 
-  const submitPost = async (nickname, content) => {
+  const submitPost = async (content) => {
     if (!isSupabaseConfigured) return;
-    await supabase.from('posts').insert({ nickname, content });
+    await supabase.from('posts').insert({
+      nickname: user.nickname,
+      student_id: user.student_id,
+      content,
+    });
   };
 
   const toggleLike = async (postId) => {
     if (!isSupabaseConfigured) return;
     const post = posts.find(p => p.id === postId);
-    const hasLiked = post?.likes?.includes(userId);
+    const hasLiked = post?.likes?.includes(user.student_id);
     if (hasLiked) {
-      await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userId);
+      await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', user.student_id);
     } else {
-      await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
+      await supabase.from('post_likes').insert({ post_id: postId, user_id: user.student_id });
     }
   };
 
-  const addComment = async (postId, nickname, content) => {
+  const addComment = async (postId, content) => {
     if (!isSupabaseConfigured) return;
-    await supabase.from('post_comments').insert({ post_id: postId, nickname, content });
+    await supabase.from('post_comments').insert({
+      post_id: postId,
+      nickname: user.nickname,
+      student_id: user.student_id,
+      content,
+    });
   };
 
   const points = done.reduce((sum, id) => sum + (MISSIONS.find(m => m.id === id)?.points || 0), 0);
@@ -863,7 +1172,7 @@ function Fair({ onBack }) {
       </div>
 
       {tab === 'mission' && <MissionList done={done} onToggle={toggleMission} />}
-      {tab === 'community' && <Community posts={posts} loading={loading} userId={userId}
+      {tab === 'community' && <Community posts={posts} loading={loading} user={user}
         onSubmit={submitPost} onToggleLike={toggleLike} onAddComment={addComment} />}
     </main>
   );
@@ -893,7 +1202,7 @@ function MissionList({ done, onToggle }) {
   );
 }
 
-function Community({ posts, loading, userId, onSubmit, onToggleLike, onAddComment }) {
+function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment }) {
   const composerRef = useRef(null);
   const scrollToComposer = () => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -918,13 +1227,13 @@ function Community({ posts, loading, userId, onSubmit, onToggleLike, onAddCommen
           </div>
         )}
         {posts.map(p => (
-          <PostCard key={p.id} post={p} userId={userId}
+          <PostCard key={p.id} post={p} user={user}
             onToggleLike={onToggleLike} onAddComment={onAddComment} />
         ))}
       </div>
 
       <div ref={composerRef}>
-        <Composer onSubmit={onSubmit} />
+        <Composer onSubmit={onSubmit} user={user} />
       </div>
     </div>
   );
@@ -948,21 +1257,24 @@ function Avatar({ name, size = 40 }) {
   );
 }
 
-function PostCard({ post, userId, onToggleLike, onAddComment }) {
+function PostCard({ post, user, onToggleLike, onAddComment }) {
   const [showComments, setShowComments] = useState(false);
   const likes = post.likes || [];
   const comments = post.comments || [];
-  const hasLiked = userId && likes.includes(userId);
+  const hasLiked = user && likes.includes(user.student_id);
   const time = new Date(post.created_at).getTime();
+  const isMine = user && post.student_id === user.student_id;
 
   return (
     <article className="p-4 rounded-2xl transition-colors"
-      style={{ background: 'white', border: '1.5px solid #F0E6D2' }}>
+      style={{ background: 'white', border: `1.5px solid ${isMine ? '#FFC93C55' : '#F0E6D2'}` }}>
       <div className="flex gap-3">
         <Avatar name={post.nickname} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <span className="font-bold text-sm" style={{ color: '#1B2541' }}>{post.nickname}</span>
+            {post.student_id && <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>{post.student_id}</span>}
+            {isMine && <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
             <span className="text-xs" style={{ color: '#8893A8' }}>· {formatTime(time)}</span>
           </div>
           <p className="text-[15px] whitespace-pre-wrap break-words mb-3" style={{ color: '#1B2541', lineHeight: 1.55 }}>
@@ -988,12 +1300,15 @@ function PostCard({ post, userId, onToggleLike, onAddComment }) {
             <div className="mt-3 pt-3 border-t" style={{ borderColor: '#F0E6D2' }}>
               {comments.map(c => {
                 const ct = new Date(c.created_at).getTime();
+                const cIsMine = user && c.student_id === user.student_id;
                 return (
                   <div key={c.id} className="flex gap-2 mb-3 last:mb-2">
                     <Avatar name={c.nickname} size={28} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-xs" style={{ color: '#1B2541' }}>{c.nickname}</span>
+                        {c.student_id && <span className="text-[10px] px-1 rounded" style={{ background: '#FFFBF0', color: '#8893A8' }}>{c.student_id}</span>}
+                        {cIsMine && <span className="text-[10px] px-1 rounded font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
                         <span className="text-[11px]" style={{ color: '#8893A8' }}>· {formatTime(ct)}</span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap break-words mt-0.5" style={{ color: '#1B2541', lineHeight: 1.5 }}>
@@ -1003,7 +1318,7 @@ function PostCard({ post, userId, onToggleLike, onAddComment }) {
                   </div>
                 );
               })}
-              <CommentForm onSubmit={(nn, ct) => onAddComment(post.id, nn, ct)} />
+              <CommentForm onSubmit={(ct) => onAddComment(post.id, ct)} />
             </div>
           )}
         </div>
@@ -1013,28 +1328,21 @@ function PostCard({ post, userId, onToggleLike, onAddComment }) {
 }
 
 function CommentForm({ onSubmit }) {
-  const [nickname, setNickname] = useState('');
   const [content, setContent] = useState('');
-  const canSubmit = nickname.trim() && content.trim();
+  const canSubmit = content.trim();
 
   const handle = () => {
     if (!canSubmit) return;
-    onSubmit(nickname.trim().slice(0, 20), content.trim().slice(0, 300));
+    onSubmit(content.trim().slice(0, 300));
     setContent('');
   };
 
   return (
     <div className="flex gap-2 mt-2">
-      <div className="flex-1 flex flex-col gap-1.5">
-        <input value={nickname} onChange={e => setNickname(e.target.value)} maxLength={20}
-          placeholder="닉네임"
-          className="px-2.5 py-1.5 rounded-lg text-xs outline-none"
-          style={{ background: '#FFFBF0', border: '1px solid #EADFC7' }} />
-        <textarea value={content} onChange={e => setContent(e.target.value)} maxLength={300} rows={2}
-          placeholder="댓글 남기기..."
-          className="px-2.5 py-1.5 rounded-lg text-sm outline-none resize-none"
-          style={{ background: '#FFFBF0', border: '1px solid #EADFC7' }} />
-      </div>
+      <textarea value={content} onChange={e => setContent(e.target.value)} maxLength={300} rows={2}
+        placeholder="댓글 남기기..."
+        className="flex-1 px-2.5 py-1.5 rounded-lg text-sm outline-none resize-none"
+        style={{ background: '#FFFBF0', border: '1px solid #EADFC7' }} />
       <button onClick={handle} disabled={!canSubmit}
         className="self-end flex items-center justify-center w-9 h-9 rounded-full transition flex-shrink-0"
         style={{ background: canSubmit ? '#2B7FFF' : '#EADFC7', opacity: canSubmit ? 1 : 0.6 }}>
@@ -1044,16 +1352,15 @@ function CommentForm({ onSubmit }) {
   );
 }
 
-function Composer({ onSubmit }) {
-  const [nickname, setNickname] = useState('');
+function Composer({ onSubmit, user }) {
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const canSubmit = nickname.trim() && content.trim() && !submitting;
+  const canSubmit = content.trim() && !submitting;
 
   const handle = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
-    await onSubmit(nickname.trim().slice(0, 20), content.trim().slice(0, 500));
+    await onSubmit(content.trim().slice(0, 500));
     setContent('');
     setSubmitting(false);
   };
@@ -1070,17 +1377,15 @@ function Composer({ onSubmit }) {
             style={{ background: 'linear-gradient(135deg, #FF7A59, #FFC93C)' }}>
             ✨
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="font-display text-2xl leading-tight">내 생각 남기기</h3>
-            <p className="text-xs" style={{ color: '#6B7489' }}>후기·의견·유용한 정보 무엇이든 환영!</p>
+            <p className="text-xs" style={{ color: '#6B7489' }}>
+              <b style={{ color: '#1B2541' }}>{user.nickname}</b> ({user.student_id}) 으로 작성됩니다
+            </p>
           </div>
         </div>
 
         <div className="relative space-y-3">
-          <input value={nickname} onChange={e => setNickname(e.target.value)} maxLength={20}
-            placeholder="닉네임 (최대 20자)"
-            className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition focus:ring-2"
-            style={{ background: 'white', border: '1.5px solid #EADFC7' }} />
           <textarea value={content} onChange={e => setContent(e.target.value)} maxLength={500} rows={4}
             placeholder="오늘 박람회에서 인상 깊었던 부스, 선택과목 팁, 친구들에게 공유하고 싶은 정보... 무엇이든 자유롭게!"
             className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none transition focus:ring-2"
