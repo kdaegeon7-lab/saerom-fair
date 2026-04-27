@@ -3,9 +3,98 @@ import {
   BookOpen, Sparkles, Trophy, ArrowLeft, Plus, Check, MessageSquare,
   Users, Compass, Lightbulb, Globe, GraduationCap, Target, Heart,
   Send, Clock, Award, ChevronRight, RefreshCw, AlertCircle, MapPin,
-  ThumbsUp, MessageCircle
+  ThumbsUp, MessageCircle, FileText, X
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
+
+// ============ 과목별 안내자료 PDF 매핑 ============
+// Supabase Storage의 subject-guides 버킷에 업로드된 PDF 파일명
+const SUBJECT_PDFS = {
+  '주제 탐구 독서': 'topic-inquiry-reading.pdf',
+  '문학과 영상': 'literature-and-media.pdf',
+  '독서 토론과 글쓰기': 'reading-discussion-writing.pdf',
+  '언어생활 탐구': 'language-life-inquiry.pdf',
+  '기하': 'geometry.pdf',
+  '미적분Ⅱ': 'calculus-2.pdf',
+  '경제 수학': 'economic-math.pdf',
+  '수학과 문화': 'math-and-culture.pdf',
+  '수학과제 탐구': 'math-project-inquiry.pdf',
+  '심화 영어': 'advanced-english.pdf',
+  '심화 영어 독해와 작문': 'advanced-english-reading-writing.pdf',
+  '실생활 영어 회화': 'practical-english-conversation.pdf',
+  '세계 문화와 영어': 'world-culture-english.pdf',
+  '세계시민과 지리': 'global-citizen-geography.pdf',
+  '세계사': 'world-history.pdf',
+  '사회와 문화': 'society-and-culture.pdf',
+  '현대사회와 윤리': 'modern-society-ethics.pdf',
+  '한국지리 탐구': 'korean-geography-inquiry.pdf',
+  '도시의 미래 탐구': 'urban-future-inquiry.pdf',
+  '동아시아 역사 기행': 'east-asia-history-travel.pdf',
+  '정치': 'politics.pdf',
+  '법과 사회': 'law-and-society.pdf',
+  '경제': 'economics.pdf',
+  '윤리와 사상': 'ethics-and-thought.pdf',
+  '인문학과 윤리': 'humanities-and-ethics.pdf',
+  '국제 관계의 이해': 'international-relations.pdf',
+  '여행지리': 'travel-geography.pdf',
+  '역사로 탐구하는 현대 세계': 'modern-world-history.pdf',
+  '사회문제 탐구': 'social-issues-inquiry.pdf',
+  '금융과 경제생활': 'finance-economic-life.pdf',
+  '윤리문제 탐구': 'ethics-issues-inquiry.pdf',
+  '기후변화와 지속가능한 세계': 'climate-sustainable-world.pdf',
+  '물리학': 'physics.pdf',
+  '화학': 'chemistry.pdf',
+  '생명과학': 'biology.pdf',
+  '지구과학': 'earth-science.pdf',
+  '역학과 에너지': 'mechanics-energy.pdf',
+  '전자기와 양자': 'electromagnetism-quantum.pdf',
+  '물질과 에너지': 'matter-energy.pdf',
+  '화학 반응의 세계': 'chemical-reactions.pdf',
+  '세포와 물질대사': 'cell-metabolism.pdf',
+  '생물의 유전': 'genetics.pdf',
+  '지구시스템과학': 'earth-system-science.pdf',
+  '행성우주과학': 'planetary-space-science.pdf',
+  '과학의 역사와 문화': 'science-history-culture.pdf',
+  '기후변화와 환경생태': 'climate-environment-ecology.pdf',
+  '융합과학 탐구': 'convergence-science-inquiry.pdf',
+  '운동과 건강': 'exercise-health.pdf',
+  '음악 연주와 창작': 'music-performance-creation.pdf',
+  '음악 감상과 비평': 'music-appreciation-criticism.pdf',
+  '미술 창작': 'art-creation.pdf',
+  '미술 감상과 비평': 'art-appreciation-criticism.pdf',
+  '음악과 미디어': 'music-and-media.pdf',
+  '미술과 매체': 'art-and-media.pdf',
+  '로봇과 공학세계': 'robot-engineering.pdf',
+  '생활과학 탐구': 'life-science-inquiry.pdf',
+  '창의 공학 설계': 'creative-engineering-design.pdf',
+  '아동발달과 부모': 'child-development-parenting.pdf',
+  '프로그래밍': 'programming.pdf',
+  '인공지능 기초': 'ai-basics.pdf',
+  '데이터 과학': 'data-science.pdf',
+  '소프트웨어와 생활': 'software-and-life.pdf',
+  '중국어': 'chinese.pdf',
+  '중국어 회화': 'chinese-conversation.pdf',
+  '중국 문화': 'chinese-culture.pdf',
+  '일본어': 'japanese.pdf',
+  '일본어 회화': 'japanese-conversation.pdf',
+  '일본 문화': 'japanese-culture.pdf',
+  '고급 대수': 'advanced-algebra.pdf',
+  '물리학 실험': 'physics-experiment.pdf',
+  '화학 실험': 'chemistry-experiment.pdf',
+  '생명과학 실험': 'biology-experiment.pdf',
+  '지구과학 실험': 'earth-science-experiment.pdf',
+  '기초 체육 전공 실기': 'basic-pe-major-practice.pdf',
+  '음악과 문화': 'music-and-culture.pdf',
+  '미술과 사회': 'art-and-society.pdf',
+};
+
+function getSubjectPdfUrl(subjectName) {
+  const fname = SUBJECT_PDFS[subjectName];
+  if (!fname) return null;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl) return null;
+  return `${supabaseUrl}/storage/v1/object/public/subject-guides/${fname}`;
+}
 
 // ============ 편성표 데이터 ============
 const CHOICE_GROUPS = [
@@ -490,6 +579,7 @@ function GradeSection({ grade, groups, selected, onToggle }) {
 }
 
 function ChoiceGroupCard({ group, selected, onToggle }) {
+  const [pdfSubject, setPdfSubject] = useState(null);
   const count = selected.size;
   const isFull = count === group.nChoose;
   const maxCredit = group.nChoose * group.perCredit;
@@ -516,33 +606,112 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
           const disabled = !on && isFull;
           const groupColor = GROUP_COLORS[s.group] || '#8893A8';
           const typeColor = TYPE_COLORS[s.type];
+          const hasPdf = Boolean(SUBJECT_PDFS[s.name]);
 
           return (
-            <button key={s.name} onClick={() => onToggle(group.id, s.name, group)} disabled={disabled}
-              className="relative px-3 py-2 rounded-xl text-sm transition-all"
-              style={{
-                background: on ? groupColor : disabled ? '#F5F0E4' : 'white',
-                color: on ? 'white' : disabled ? '#B8B0A0' : '#1B2541',
-                border: `1.5px solid ${on ? groupColor : '#EADFC7'}`,
-                fontWeight: on ? 700 : 400,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.6 : 1,
-              }}>
-              <span className="inline-flex items-center gap-1.5">
-                {on && <Check className="w-3.5 h-3.5" />}
-                {s.name}
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal" style={{
-                  background: on ? 'rgba(255,255,255,0.22)' : typeColor.bg,
-                  color: on ? 'white' : typeColor.fg,
+            <div key={s.name} className="inline-flex items-stretch rounded-xl overflow-hidden"
+              style={{ border: `1.5px solid ${on ? groupColor : '#EADFC7'}` }}>
+              {/* 과목 선택 버튼 */}
+              <button onClick={() => onToggle(group.id, s.name, group)} disabled={disabled}
+                className="px-3 py-2 text-sm transition-all"
+                style={{
+                  background: on ? groupColor : disabled ? '#F5F0E4' : 'white',
+                  color: on ? 'white' : disabled ? '#B8B0A0' : '#1B2541',
+                  fontWeight: on ? 700 : 400,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.6 : 1,
                 }}>
-                  {s.type.replace('선택', '')}
+                <span className="inline-flex items-center gap-1.5">
+                  {on && <Check className="w-3.5 h-3.5" />}
+                  {s.name}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-normal" style={{
+                    background: on ? 'rgba(255,255,255,0.22)' : typeColor.bg,
+                    color: on ? 'white' : typeColor.fg,
+                  }}>
+                    {s.type.replace('선택', '')}
+                  </span>
+                  {s.math && <span className="text-[10px]" title="수학중점">🔢</span>}
+                  {s.sci && <span className="text-[10px]" title="과학중점">🔬</span>}
                 </span>
-                {s.math && <span className="text-[10px]" title="수학중점">🔢</span>}
-                {s.sci && <span className="text-[10px]" title="과학중점">🔬</span>}
-              </span>
-            </button>
+              </button>
+              {/* 안내자료 버튼 */}
+              {hasPdf && (
+                <button onClick={() => setPdfSubject(s.name)}
+                  title={`${s.name} 안내자료 보기`}
+                  className="px-2 transition-all flex items-center justify-center"
+                  style={{
+                    background: on ? 'rgba(255,255,255,0.18)' : '#FFF8E8',
+                    color: on ? 'white' : '#B8852F',
+                    borderLeft: `1px solid ${on ? 'rgba(255,255,255,0.3)' : '#EADFC7'}`,
+                  }}>
+                  <FileText className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           );
         })}
+      </div>
+
+      {pdfSubject && <PdfModal subject={pdfSubject} onClose={() => setPdfSubject(null)} />}
+    </div>
+  );
+}
+
+// ============ PDF 안내자료 모달 ============
+function PdfModal({ subject, onClose }) {
+  const url = getSubjectPdfUrl(subject);
+
+  // ESC 키로 닫기
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handler);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  if (!url) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(27,37,65,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}>
+      <div className="relative w-full max-w-4xl h-[90vh] rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: 'white' }}
+        onClick={e => e.stopPropagation()}>
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+          style={{ background: '#FFFBF0', borderBottom: '1.5px solid #F0E6D2' }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: '#FFF3E0' }}>
+              <FileText className="w-5 h-5" style={{ color: '#F57C00' }} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-display text-lg leading-tight truncate">{subject}</h3>
+              <p className="text-xs" style={{ color: '#6B7489' }}>2022 개정 교육과정 과목 안내서</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a href={url} target="_blank" rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition hover:scale-105"
+              style={{ background: '#FF7A59', color: 'white' }}>
+              새 창에서 열기
+            </a>
+            <button onClick={onClose}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition hover:bg-gray-100"
+              style={{ color: '#6B7489' }} aria-label="닫기">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        {/* PDF 뷰어 */}
+        <div className="flex-1 bg-gray-100 overflow-hidden">
+          <iframe src={url} title={`${subject} 안내자료`}
+            className="w-full h-full" style={{ border: 'none' }} />
+        </div>
       </div>
     </div>
   );
