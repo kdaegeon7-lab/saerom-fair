@@ -6,7 +6,8 @@ import {
   Send, Clock, Award, ChevronRight, RefreshCw, AlertCircle, MapPin,
   ThumbsUp, MessageCircle, FileText, X, LogIn, LogOut, User,
   Lock, Hash, Briefcase, ShieldCheck, Search,
-  QrCode, Camera, Crown, Medal, Flame, TrendingUp
+  QrCode, Camera, Crown, Medal, Flame, TrendingUp,
+  CheckCircle2, Download, Edit3, BarChart3, Wand2
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
 
@@ -735,6 +736,7 @@ function Simulation({ onBack, user }) {
   const [cohort, setCohort] = useState(null);
   const [selected, setSelected] = useState({});
   const [justCompleted, setJustCompleted] = useState(false);
+  const [showResult, setShowResult] = useState(false); // 결과 화면 표시 여부
 
   useEffect(() => {
     const s = ls.get('sim_state');
@@ -832,6 +834,20 @@ function Simulation({ onBack, user }) {
     );
   }
 
+  // 결과 화면 분기
+  if (showResult) {
+    return (
+      <ResultScreen
+        cohort={cohort}
+        groups={visibleGroups}
+        selected={selected}
+        user={user}
+        onEdit={() => setShowResult(false)}
+        onBack={onBack}
+      />
+    );
+  }
+
   return (
     <main className="max-w-6xl mx-auto px-6 pt-8 pb-8">
       <BackButton onBack={onBack} />
@@ -878,6 +894,9 @@ function Simulation({ onBack, user }) {
             selected={selected} onToggle={toggle} />
         ))}
       </div>
+
+      {/* 선택 완료 버튼 */}
+      <CompleteButton groups={visibleGroups} selected={selected} onClick={() => setShowResult(true)} />
     </main>
   );
 }
@@ -1094,6 +1113,330 @@ function PdfModal({ subject, onClose }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+// ============ 선택 완료 버튼 ============
+function CompleteButton({ groups, selected, onClick }) {
+  const totalGroups = groups.length;
+  const completedCount = groups.filter(g => (selected[g.id]?.size || 0) === g.nChoose).length;
+  const isReady = completedCount === totalGroups && totalGroups > 0;
+  const remaining = totalGroups - completedCount;
+
+  return (
+    <div className="mt-10 sticky bottom-4 z-30">
+      <button onClick={isReady ? onClick : undefined}
+        disabled={!isReady}
+        className="w-full p-5 rounded-3xl flex items-center justify-center gap-3 transition-all"
+        style={{
+          background: isReady
+            ? 'linear-gradient(135deg, #FF7A59, #FF5B8A)'
+            : '#F5F0E4',
+          color: isReady ? 'white' : '#B8B0A0',
+          fontWeight: 700,
+          cursor: isReady ? 'pointer' : 'not-allowed',
+          boxShadow: isReady ? '0 8px 24px rgba(255,122,89,0.35)' : 'none',
+          transform: isReady ? 'translateY(0)' : 'none',
+        }}>
+        <CheckCircle2 className="w-6 h-6" />
+        <span className="font-display text-lg">
+          {isReady
+            ? '선택 완료! 내 교육과정 보기'
+            : `${remaining}개 묶음을 더 채워주세요 (${completedCount}/${totalGroups})`
+          }
+        </span>
+        {isReady && <ChevronRight className="w-5 h-5" />}
+      </button>
+    </div>
+  );
+}
+
+// ============ 결과 화면 ============
+function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
+  const captureRef = useRef(null);
+  const [saving, setSaving] = useState(false);
+
+  // 선택된 과목 정보 정리
+  const selectedDetails = useMemo(() => {
+    const result = [];
+    groups.forEach(g => {
+      const picks = [...(selected[g.id] || [])];
+      picks.forEach(name => {
+        const subject = g.subjects.find(s => s.name === name);
+        if (subject) {
+          result.push({
+            ...subject,
+            grade: g.grade,
+            semester: g.semester,
+            credit: g.perCredit,
+          });
+        }
+      });
+    });
+    return result;
+  }, [groups, selected]);
+
+  // 학년/학기별 그룹화
+  const byGradeSemester = useMemo(() => {
+    const map = {};
+    selectedDetails.forEach(s => {
+      const key = `${s.grade}-${s.semester}`;
+      if (!map[key]) map[key] = { grade: s.grade, semester: s.semester, subjects: [], totalCredit: 0 };
+      map[key].subjects.push(s);
+      map[key].totalCredit += s.credit;
+    });
+    return Object.values(map).sort((a, b) =>
+      a.grade !== b.grade ? a.grade - b.grade : a.semester - b.semester
+    );
+  }, [selectedDetails]);
+
+  // 교과군별 통계
+  const byGroup = useMemo(() => {
+    const map = {};
+    selectedDetails.forEach(s => {
+      if (!map[s.group]) map[s.group] = { name: s.group, count: 0, credit: 0 };
+      map[s.group].count += 1;
+      map[s.group].credit += s.credit;
+    });
+    return Object.values(map).sort((a, b) => b.credit - a.credit);
+  }, [selectedDetails]);
+
+  // 유형별 통계
+  const byType = useMemo(() => {
+    const map = { '일반선택': 0, '진로선택': 0, '융합선택': 0 };
+    selectedDetails.forEach(s => {
+      if (map[s.type] !== undefined) map[s.type] += 1;
+    });
+    return map;
+  }, [selectedDetails]);
+
+  const totalCredit = selectedDetails.reduce((s, d) => s + d.credit, 0);
+  const totalCount = selectedDetails.length;
+
+  // 이미지로 저장
+  const saveAsImage = async () => {
+    if (!captureRef.current) return;
+    setSaving(true);
+    try {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(captureRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#FFFBF0',
+      });
+      const link = document.createElement('a');
+      link.download = `새롬고_교육과정_${user?.nickname || '나의설계'}_${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('이미지 저장 실패:', err);
+      alert('이미지 저장에 실패했어요. 다시 시도해주세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <main className="max-w-5xl mx-auto px-6 pt-8 pb-8">
+      <BackButton onBack={onBack} />
+
+      {/* 상단 액션 바 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-bold" style={{ background: '#DDF5EA', color: '#3BC4A0' }}>
+            <CheckCircle2 className="w-3 h-3 inline -mt-0.5 mr-1" />
+            완료
+          </span>
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-bold" style={{ background: cohort === 'g1' ? '#FFE8E0' : '#E0EDFF', color: cohort === 'g1' ? '#FF7A59' : '#2B7FFF' }}>
+            {cohort === 'g1' ? '현재 고1 · 2026학년도 입학생' : '현재 고2 · 2025학년도 입학생'}
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onEdit}
+            className="text-sm px-3 py-2 rounded-full inline-flex items-center gap-1.5"
+            style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+            <Edit3 className="w-3.5 h-3.5" /> 다시 수정
+          </button>
+          <button onClick={saveAsImage} disabled={saving}
+            className="text-sm px-3 py-2 rounded-full inline-flex items-center gap-1.5 transition"
+            style={{
+              background: '#FF7A59', color: 'white', fontWeight: 700,
+              opacity: saving ? 0.6 : 1, cursor: saving ? 'wait' : 'pointer',
+            }}>
+            <Download className="w-3.5 h-3.5" /> {saving ? '저장 중...' : '이미지로 저장'}
+          </button>
+        </div>
+      </div>
+
+      {/* 캡처 영역 시작 */}
+      <div ref={captureRef} className="rounded-3xl p-6 md:p-8" style={{ background: '#FFFBF0' }}>
+        {/* 헤더 */}
+        <div className="text-center mb-8 pb-6 border-b" style={{ borderColor: '#EADFC7' }}>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <img src="/saerom-logo.png" alt="새롬고" className="w-10 h-10" />
+            <span className="font-display text-base" style={{ color: '#6B7489' }}>새롬고등학교 교육과정 박람회</span>
+          </div>
+          <h2 className="font-display text-3xl md:text-4xl mb-2">
+            <span style={{ color: '#FF7A59' }}>{user?.nickname || '내'}</span>가 설계한 교육과정
+          </h2>
+          <p className="text-sm" style={{ color: '#6B7489' }}>
+            총 <b style={{ color: '#FF7A59' }}>{totalCount}과목</b> · <b style={{ color: '#FF7A59' }}>{totalCredit}학점</b>
+            {user?.student_id && <> · 학번 {user.student_id}</>}
+          </p>
+        </div>
+
+        {/* 통계 카드 3개 */}
+        <div className="grid md:grid-cols-3 gap-3 mb-8">
+          <div className="p-4 rounded-2xl text-center" style={{ background: '#FFE8E0' }}>
+            <p className="text-xs mb-1" style={{ color: '#B8552F' }}>총 이수 학점</p>
+            <p className="font-display text-3xl" style={{ color: '#FF7A59' }}>{totalCredit}<span className="text-base">학점</span></p>
+          </div>
+          <div className="p-4 rounded-2xl text-center" style={{ background: '#E0EDFF' }}>
+            <p className="text-xs mb-1" style={{ color: '#1B5FA8' }}>선택 과목 수</p>
+            <p className="font-display text-3xl" style={{ color: '#2B7FFF' }}>{totalCount}<span className="text-base">과목</span></p>
+          </div>
+          <div className="p-4 rounded-2xl text-center" style={{ background: '#DDF5EA' }}>
+            <p className="text-xs mb-1" style={{ color: '#1F8868' }}>주요 교과군</p>
+            <p className="font-display text-2xl" style={{ color: '#3BC4A0' }}>{byGroup[0]?.name || '-'}</p>
+          </div>
+        </div>
+
+        {/* 학년/학기별 정리 */}
+        <div className="space-y-6 mb-8">
+          {byGradeSemester.map(gs => (
+            <div key={`${gs.grade}-${gs.semester}`}>
+              <div className="flex items-baseline gap-3 mb-3">
+                <h3 className="font-display text-xl">{gs.grade}학년 {gs.semester}학기</h3>
+                <span className="text-sm" style={{ color: '#8893A8' }}>
+                  {gs.subjects.length}과목 · {gs.totalCredit}학점
+                </span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {gs.subjects.map((s, i) => {
+                  const groupColor = GROUP_COLORS[s.group] || '#8893A8';
+                  const typeColor = TYPE_COLORS[s.type];
+                  return (
+                    <div key={`${s.name}-${i}`}
+                      className="p-3 rounded-xl flex items-center gap-3"
+                      style={{ background: 'white', border: '1.5px solid #F0E6D2' }}>
+                      <div className="w-2 h-10 rounded-full flex-shrink-0" style={{ background: groupColor }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                          <span className="font-bold text-sm">{s.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{
+                            background: typeColor.bg, color: typeColor.fg,
+                          }}>
+                            {s.type.replace('선택', '')}
+                          </span>
+                          {s.math && <span className="text-[10px]" title="수학중점">🔢</span>}
+                          {s.sci && <span className="text-[10px]" title="과학중점">🔬</span>}
+                        </div>
+                        <p className="text-xs" style={{ color: '#8893A8' }}>
+                          {s.group} · {s.credit}학점
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 교과군별 분포 */}
+        <div className="mb-8">
+          <h3 className="font-display text-xl mb-3 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" style={{ color: '#FF7A59' }} />
+            교과군별 분포
+          </h3>
+          <div className="space-y-2">
+            {byGroup.map(g => {
+              const groupColor = GROUP_COLORS[g.name] || '#8893A8';
+              const pct = (g.credit / totalCredit) * 100;
+              return (
+                <div key={g.name} className="flex items-center gap-3">
+                  <span className="text-sm font-bold w-32 flex-shrink-0" style={{ color: '#1B2541' }}>{g.name}</span>
+                  <div className="flex-1 h-7 rounded-full overflow-hidden flex items-center"
+                    style={{ background: '#FFFBF0', border: '1px solid #EADFC7' }}>
+                    <div className="h-full flex items-center px-2 transition-all duration-500"
+                      style={{ width: `${Math.max(pct, 8)}%`, background: groupColor, color: 'white' }}>
+                      <span className="text-xs font-bold whitespace-nowrap">{g.count}과목 · {g.credit}학점</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 유형별 작은 통계 */}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            {Object.entries(byType).map(([type, count]) => {
+              const tc = TYPE_COLORS[type];
+              return (
+                <div key={type} className="p-3 rounded-xl text-center"
+                  style={{ background: tc.bg }}>
+                  <p className="text-[10px]" style={{ color: tc.fg }}>{type}</p>
+                  <p className="font-display text-xl" style={{ color: tc.fg }}>{count}<span className="text-xs">과목</span></p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* AI 피드백 영역 */}
+        <div className="p-5 md:p-6 rounded-2xl"
+          style={{ background: 'linear-gradient(135deg, #FFF8E8, #FFE8E0)', border: '1.5px solid #FFC93C' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-9 h-9 rounded-2xl flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #FF7A59, #FFC93C)' }}>
+              <Wand2 className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-display text-lg leading-tight">AI 진로 코칭</h3>
+              <p className="text-[11px]" style={{ color: '#8B6814' }}>내가 설계한 교육과정에 대한 AI의 한 줄 평가</p>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-white" style={{ border: '1px dashed #EADFC7' }}>
+            <p className="text-sm leading-relaxed" style={{ color: '#1B2541' }}>
+              <span className="font-bold" style={{ color: '#FF7A59' }}>내가 설계한 교육과정은...</span>
+            </p>
+            <p className="text-sm mt-3" style={{ color: '#8893A8', fontStyle: 'italic' }}>
+              ✨ 곧 AI 분석이 제공될 예정입니다. 박람회 본 행사에서 만나보세요!
+            </p>
+          </div>
+        </div>
+
+        {/* 푸터 (캡처 시 워터마크처럼) */}
+        <div className="text-center mt-8 pt-6 border-t" style={{ borderColor: '#EADFC7' }}>
+          <p className="text-xs" style={{ color: '#8893A8' }}>
+            © 2026 새롬고등학교 교육과정 박람회 · 수학과학중점과정 기준
+          </p>
+          <p className="text-[10px] mt-1" style={{ color: '#B8B0A0' }}>
+            ※ 이 결과는 시뮬레이션이며, 실제 과목 선택 시 변경될 수 있습니다.
+          </p>
+        </div>
+      </div>
+      {/* 캡처 영역 끝 */}
+
+      {/* 하단 액션 (캡처 영역 밖) */}
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+        <button onClick={onEdit}
+          className="text-sm px-4 py-2.5 rounded-full inline-flex items-center gap-1.5"
+          style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+          <Edit3 className="w-4 h-4" /> 다시 수정하기
+        </button>
+        <button onClick={saveAsImage} disabled={saving}
+          className="text-sm px-4 py-2.5 rounded-full inline-flex items-center gap-1.5 transition"
+          style={{
+            background: 'linear-gradient(135deg, #FF7A59, #FF5B8A)',
+            color: 'white', fontWeight: 700,
+            boxShadow: saving ? 'none' : '0 4px 12px rgba(255,122,89,0.3)',
+            opacity: saving ? 0.6 : 1, cursor: saving ? 'wait' : 'pointer',
+          }}>
+          <Download className="w-4 h-4" /> {saving ? '저장 중...' : '이미지로 저장'}
+        </button>
+      </div>
+    </main>
   );
 }
 
