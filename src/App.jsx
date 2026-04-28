@@ -7,7 +7,8 @@ import {
   ThumbsUp, MessageCircle, FileText, X, LogIn, LogOut, User,
   Lock, Hash, Briefcase, ShieldCheck, Search,
   QrCode, Camera, Crown, Medal, Flame, TrendingUp,
-  CheckCircle2, Download, Edit3, BarChart3, Wand2
+  CheckCircle2, Download, Edit3, BarChart3, Wand2,
+  MoreVertical, Trash2, Save
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
 
@@ -1650,6 +1651,46 @@ function Fair({ onBack, user }) {
     });
   };
 
+  // 게시글 수정
+  const editPost = async (postId, newContent) => {
+    if (!isSupabaseConfigured) return false;
+    const { error } = await supabase.from('posts')
+      .update({ content: newContent, updated_at: new Date().toISOString() })
+      .eq('id', postId)
+      .eq('student_id', user.student_id); // 본인만 수정 가능
+    return !error;
+  };
+
+  // 게시글 삭제 (soft delete)
+  const deletePost = async (postId) => {
+    if (!isSupabaseConfigured) return false;
+    const { error } = await supabase.from('posts')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', postId)
+      .eq('student_id', user.student_id);
+    return !error;
+  };
+
+  // 댓글 수정
+  const editComment = async (commentId, newContent) => {
+    if (!isSupabaseConfigured) return false;
+    const { error } = await supabase.from('post_comments')
+      .update({ content: newContent, updated_at: new Date().toISOString() })
+      .eq('id', commentId)
+      .eq('student_id', user.student_id);
+    return !error;
+  };
+
+  // 댓글 삭제 (soft delete)
+  const deleteComment = async (commentId) => {
+    if (!isSupabaseConfigured) return false;
+    const { error } = await supabase.from('post_comments')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', commentId)
+      .eq('student_id', user.student_id);
+    return !error;
+  };
+
   // 내 점수 계산
   const myPoints = useMemo(() => {
     const visitPts = myVisits.reduce((s, v) => s + (v.points || 0), 0);
@@ -1727,7 +1768,9 @@ function Fair({ onBack, user }) {
       {tab === 'mission' && <MissionList user={user} booths={booths} myVisits={myVisits} myRewards={myRewards} onScanQr={() => setScanning(true)} />}
       {tab === 'ranking' && <Ranking allScores={allScores} myStudentId={user.student_id} />}
       {tab === 'community' && <Community posts={posts} loading={loading} user={user}
-        onSubmit={submitPost} onToggleLike={toggleLike} onAddComment={addComment} />}
+        onSubmit={submitPost} onToggleLike={toggleLike} onAddComment={addComment}
+        onEditPost={editPost} onDeletePost={deletePost}
+        onEditComment={editComment} onDeleteComment={deleteComment} />}
 
       {/* QR 스캐너 모달 */}
       {scanning && <QrScannerModal onScan={handleQrScan} onClose={() => setScanning(false)} />}
@@ -2027,16 +2070,17 @@ function QrScannerModal({ onScan, onClose }) {
   );
 }
 
-function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment }) {
+function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment,
+                    onEditPost, onDeletePost, onEditComment, onDeleteComment }) {
   const composerRef = useRef(null);
   const [query, setQuery] = useState('');
   const [showBest, setShowBest] = useState(true);
   const scrollToComposer = () => composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  // 베스트 게시글 TOP 10 (좋아요 1개 이상만)
+  // 베스트 게시글 TOP 10 (좋아요 1개 이상, 삭제되지 않은 글만)
   const bestPosts = useMemo(() => {
     return [...posts]
-      .filter(p => (p.likes || []).length > 0)
+      .filter(p => !p.deleted_at && (p.likes || []).length > 0)
       .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
       .slice(0, 10);
   }, [posts]);
@@ -2045,16 +2089,20 @@ function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment 
     const q = query.trim().toLowerCase();
     if (!q) return posts;
     return posts.filter(p => {
-      const inPost =
+      // 삭제된 글은 본문 매칭에서만 제외 (닉네임/학번도 마스킹되어 있으니 어차피 매칭 안 됨)
+      const inPost = !p.deleted_at && (
         (p.nickname || '').toLowerCase().includes(q) ||
         (p.student_id || '').toLowerCase().includes(q) ||
-        (p.content || '').toLowerCase().includes(q);
+        (p.content || '').toLowerCase().includes(q)
+      );
       if (inPost) return true;
-      // 댓글에서도 검색
+      // 살아있는 댓글에서만 검색
       const inComments = (p.comments || []).some(c =>
-        (c.nickname || '').toLowerCase().includes(q) ||
-        (c.student_id || '').toLowerCase().includes(q) ||
-        (c.content || '').toLowerCase().includes(q)
+        !c.deleted_at && (
+          (c.nickname || '').toLowerCase().includes(q) ||
+          (c.student_id || '').toLowerCase().includes(q) ||
+          (c.content || '').toLowerCase().includes(q)
+        )
       );
       return inComments;
     });
@@ -2152,7 +2200,9 @@ function Community({ posts, loading, user, onSubmit, onToggleLike, onAddComment 
         )}
         {filteredPosts.map(p => (
           <PostCard key={p.id} post={p} user={user} highlight={query.trim()}
-            onToggleLike={onToggleLike} onAddComment={onAddComment} />
+            onToggleLike={onToggleLike} onAddComment={onAddComment}
+            onEditPost={onEditPost} onDeletePost={onDeletePost}
+            onEditComment={onEditComment} onDeleteComment={onDeleteComment} />
         ))}
       </div>
 
@@ -2181,93 +2231,302 @@ function Avatar({ name, size = 40 }) {
   );
 }
 
-function PostCard({ post, user, highlight, onToggleLike, onAddComment }) {
+function PostCard({ post, user, highlight, onToggleLike, onAddComment,
+                   onEditPost, onDeletePost, onEditComment, onDeleteComment }) {
   const [showComments, setShowComments] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content || '');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const likes = post.likes || [];
   const comments = post.comments || [];
   const hasLiked = user && likes.includes(user.student_id);
   const time = new Date(post.created_at).getTime();
   const isMine = user && post.student_id === user.student_id;
+  const isDeleted = Boolean(post.deleted_at);
+  const isEdited = Boolean(post.updated_at) && !isDeleted;
 
   // 검색 시 댓글에 매칭되는 게 있으면 자동으로 댓글 펼침
   const hasMatchingComment = highlight && comments.some(c =>
-    (c.nickname || '').toLowerCase().includes(highlight.toLowerCase()) ||
-    (c.student_id || '').toLowerCase().includes(highlight.toLowerCase()) ||
-    (c.content || '').toLowerCase().includes(highlight.toLowerCase())
+    !c.deleted_at && (
+      (c.nickname || '').toLowerCase().includes(highlight.toLowerCase()) ||
+      (c.student_id || '').toLowerCase().includes(highlight.toLowerCase()) ||
+      (c.content || '').toLowerCase().includes(highlight.toLowerCase())
+    )
   );
   const showCommentsEffective = showComments || hasMatchingComment;
 
+  const handleEditSave = async () => {
+    const trimmed = editContent.trim();
+    if (!trimmed || trimmed === post.content || savingEdit) return;
+    setSavingEdit(true);
+    const ok = await onEditPost(post.id, trimmed.slice(0, 500));
+    setSavingEdit(false);
+    if (ok) setIsEditing(false);
+    else alert('수정에 실패했어요. 다시 시도해주세요.');
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('이 글을 삭제할까요?\n삭제된 글은 "삭제된 글입니다"로 표시되며, 받은 추천이나 포인트는 유지됩니다.')) return;
+    const ok = await onDeletePost(post.id);
+    setMenuOpen(false);
+    if (!ok) alert('삭제에 실패했어요. 다시 시도해주세요.');
+  };
+
   return (
     <article id={`post-${post.id}`} className="p-4 rounded-2xl transition-colors"
-      style={{ background: 'white', border: `1.5px solid ${isMine ? '#FFC93C55' : '#F0E6D2'}` }}>
+      style={{
+        background: isDeleted ? '#FAFAF5' : 'white',
+        border: `1.5px solid ${isMine && !isDeleted ? '#FFC93C55' : '#F0E6D2'}`
+      }}>
       <div className="flex gap-3">
-        <Avatar name={post.nickname} />
+        <Avatar name={isDeleted ? '?' : post.nickname} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className="font-bold text-sm" style={{ color: '#1B2541' }}>
-              <Highlighted text={post.nickname} highlight={highlight} />
-            </span>
-            {post.student_id && (
-              <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>
-                <Highlighted text={post.student_id} highlight={highlight} />
-              </span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap min-w-0">
+              {isDeleted ? (
+                <span className="font-bold text-sm" style={{ color: '#8893A8' }}>(삭제됨)</span>
+              ) : (
+                <>
+                  <span className="font-bold text-sm" style={{ color: '#1B2541' }}>
+                    <Highlighted text={post.nickname} highlight={highlight} />
+                  </span>
+                  {post.student_id && (
+                    <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>
+                      <Highlighted text={post.student_id} highlight={highlight} />
+                    </span>
+                  )}
+                  {isMine && <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
+                  <span className="text-xs" style={{ color: '#8893A8' }}>· {formatTime(time)}</span>
+                  {isEdited && <span className="text-[10px]" style={{ color: '#8893A8' }}>· 수정됨</span>}
+                </>
+              )}
+            </div>
+
+            {/* 본인 글에만 ⋮ 메뉴 */}
+            {isMine && !isDeleted && !isEditing && (
+              <PostMenu onEdit={() => { setIsEditing(true); setEditContent(post.content); setMenuOpen(false); }}
+                onDelete={handleDelete}
+                isOpen={menuOpen} onToggle={() => setMenuOpen(o => !o)} />
             )}
-            {isMine && <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
-            <span className="text-xs" style={{ color: '#8893A8' }}>· {formatTime(time)}</span>
           </div>
-          <p className="text-[15px] whitespace-pre-wrap break-words mb-3" style={{ color: '#1B2541', lineHeight: 1.55 }}>
-            <Highlighted text={post.content} highlight={highlight} />
-          </p>
-          <div className="flex items-center gap-1 -ml-2">
-            <button onClick={() => onToggleLike(post.id)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs transition-all group"
-              style={{ color: hasLiked ? '#FF5B8A' : '#8893A8' }}>
-              <ThumbsUp className="w-4 h-4 transition-transform group-hover:scale-110"
-                fill={hasLiked ? '#FF5B8A' : 'none'} strokeWidth={hasLiked ? 2.2 : 1.8} />
-              <span style={{ fontWeight: hasLiked ? 700 : 400 }}>{likes.length > 0 ? likes.length : ''}</span>
-            </button>
+
+          {/* 본문 또는 수정 폼 또는 삭제 안내 */}
+          {isDeleted ? (
+            <p className="text-sm italic mb-3 py-2" style={{ color: '#B0B5C0' }}>
+              삭제된 글입니다.
+            </p>
+          ) : isEditing ? (
+            <div className="mb-3">
+              <textarea value={editContent} onChange={e => setEditContent(e.target.value)} maxLength={500} rows={4}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none focus:ring-2"
+                style={{ background: '#FFFBF0', border: '1.5px solid #FF7A59', lineHeight: 1.55 }}
+                autoFocus />
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs" style={{ color: '#8893A8' }}>{editContent.length} / 500</span>
+                <div className="flex gap-2">
+                  <button onClick={() => { setIsEditing(false); setEditContent(post.content); }}
+                    className="text-xs px-3 py-1.5 rounded-full"
+                    style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+                    취소
+                  </button>
+                  <button onClick={handleEditSave}
+                    disabled={savingEdit || !editContent.trim() || editContent.trim() === post.content}
+                    className="text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1 transition"
+                    style={{
+                      background: '#FF7A59', color: 'white', fontWeight: 700,
+                      opacity: (savingEdit || !editContent.trim() || editContent.trim() === post.content) ? 0.5 : 1,
+                    }}>
+                    <Save className="w-3 h-3" /> {savingEdit ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[15px] whitespace-pre-wrap break-words mb-3" style={{ color: '#1B2541', lineHeight: 1.55 }}>
+              <Highlighted text={post.content} highlight={highlight} />
+            </p>
+          )}
+
+          {/* 액션 버튼 (삭제/수정 중이 아닐 때만) */}
+          {!isDeleted && !isEditing && (
+            <div className="flex items-center gap-1 -ml-2">
+              <button onClick={() => onToggleLike(post.id)}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs transition-all group"
+                style={{ color: hasLiked ? '#FF5B8A' : '#8893A8' }}>
+                <ThumbsUp className="w-4 h-4 transition-transform group-hover:scale-110"
+                  fill={hasLiked ? '#FF5B8A' : 'none'} strokeWidth={hasLiked ? 2.2 : 1.8} />
+                <span style={{ fontWeight: hasLiked ? 700 : 400 }}>{likes.length > 0 ? likes.length : ''}</span>
+              </button>
+              <button onClick={() => setShowComments(s => !s)}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs transition-all"
+                style={{ color: showCommentsEffective ? '#2B7FFF' : '#8893A8', fontWeight: showCommentsEffective ? 700 : 400 }}>
+                <MessageCircle className="w-4 h-4" strokeWidth={showCommentsEffective ? 2.2 : 1.8} />
+                <span>{comments.filter(c => !c.deleted_at).length > 0 ? comments.filter(c => !c.deleted_at).length : ''}</span>
+              </button>
+            </div>
+          )}
+
+          {/* 삭제된 글에서도 댓글 토글 가능 (다른 사람의 댓글이 있을 수 있음) */}
+          {isDeleted && comments.length > 0 && (
             <button onClick={() => setShowComments(s => !s)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs transition-all"
-              style={{ color: showCommentsEffective ? '#2B7FFF' : '#8893A8', fontWeight: showCommentsEffective ? 700 : 400 }}>
-              <MessageCircle className="w-4 h-4" strokeWidth={showCommentsEffective ? 2.2 : 1.8} />
-              <span>{comments.length > 0 ? comments.length : ''}</span>
+              className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs"
+              style={{ color: '#8893A8' }}>
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>{comments.filter(c => !c.deleted_at).length}개 댓글</span>
             </button>
-          </div>
+          )}
 
           {showCommentsEffective && (
             <div className="mt-3 pt-3 border-t" style={{ borderColor: '#F0E6D2' }}>
-              {comments.map(c => {
-                const ct = new Date(c.created_at).getTime();
-                const cIsMine = user && c.student_id === user.student_id;
-                return (
-                  <div key={c.id} className="flex gap-2 mb-3 last:mb-2">
-                    <Avatar name={c.nickname} size={28} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-xs" style={{ color: '#1B2541' }}>
-                          <Highlighted text={c.nickname} highlight={highlight} />
-                        </span>
-                        {c.student_id && (
-                          <span className="text-[10px] px-1 rounded" style={{ background: '#FFFBF0', color: '#8893A8' }}>
-                            <Highlighted text={c.student_id} highlight={highlight} />
-                          </span>
-                        )}
-                        {cIsMine && <span className="text-[10px] px-1 rounded font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
-                        <span className="text-[11px]" style={{ color: '#8893A8' }}>· {formatTime(ct)}</span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap break-words mt-0.5" style={{ color: '#1B2541', lineHeight: 1.5 }}>
-                        <Highlighted text={c.content} highlight={highlight} />
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-              <CommentForm onSubmit={(ct) => onAddComment(post.id, ct)} />
+              {comments.map(c => (
+                <CommentRow key={c.id} comment={c} user={user} highlight={highlight}
+                  onEditComment={onEditComment} onDeleteComment={onDeleteComment} />
+              ))}
+              {!isDeleted && <CommentForm onSubmit={(ct) => onAddComment(post.id, ct)} />}
             </div>
           )}
         </div>
       </div>
     </article>
+  );
+}
+
+// 게시글/댓글 ⋮ 메뉴
+function PostMenu({ onEdit, onDelete, isOpen, onToggle }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onToggle();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen, onToggle]);
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button onClick={onToggle}
+        className="w-7 h-7 rounded-full flex items-center justify-center transition hover:bg-gray-100"
+        style={{ color: '#8893A8' }} aria-label="메뉴">
+        <MoreVertical className="w-4 h-4" />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-8 z-20 rounded-xl overflow-hidden min-w-[100px]"
+          style={{ background: 'white', border: '1.5px solid #EADFC7', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+          <button onClick={onEdit}
+            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50"
+            style={{ color: '#1B2541' }}>
+            <Edit3 className="w-3.5 h-3.5" /> 수정
+          </button>
+          <button onClick={onDelete}
+            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-red-50"
+            style={{ color: '#E74C3C', borderTop: '1px solid #F0E6D2' }}>
+            <Trash2 className="w-3.5 h-3.5" /> 삭제
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 댓글 1개
+function CommentRow({ comment: c, user, highlight, onEditComment, onDeleteComment }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(c.content || '');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const ct = new Date(c.created_at).getTime();
+  const cIsMine = user && c.student_id === user.student_id;
+  const cIsDeleted = Boolean(c.deleted_at);
+  const cIsEdited = Boolean(c.updated_at) && !cIsDeleted;
+
+  const handleEditSave = async () => {
+    const trimmed = editContent.trim();
+    if (!trimmed || trimmed === c.content || savingEdit) return;
+    setSavingEdit(true);
+    const ok = await onEditComment(c.id, trimmed.slice(0, 300));
+    setSavingEdit(false);
+    if (ok) setIsEditing(false);
+    else alert('수정에 실패했어요.');
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('이 댓글을 삭제할까요?')) return;
+    const ok = await onDeleteComment(c.id);
+    setMenuOpen(false);
+    if (!ok) alert('삭제에 실패했어요.');
+  };
+
+  return (
+    <div className="flex gap-2 mb-3 last:mb-2">
+      <Avatar name={cIsDeleted ? '?' : c.nickname} size={28} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            {cIsDeleted ? (
+              <span className="font-bold text-xs" style={{ color: '#8893A8' }}>(삭제됨)</span>
+            ) : (
+              <>
+                <span className="font-bold text-xs" style={{ color: '#1B2541' }}>
+                  <Highlighted text={c.nickname} highlight={highlight} />
+                </span>
+                {c.student_id && (
+                  <span className="text-[10px] px-1 rounded" style={{ background: '#FFFBF0', color: '#8893A8' }}>
+                    <Highlighted text={c.student_id} highlight={highlight} />
+                  </span>
+                )}
+                {cIsMine && <span className="text-[10px] px-1 rounded font-bold" style={{ background: '#FFF3E0', color: '#F57C00' }}>나</span>}
+                <span className="text-[11px]" style={{ color: '#8893A8' }}>· {formatTime(ct)}</span>
+                {cIsEdited && <span className="text-[10px]" style={{ color: '#8893A8' }}>· 수정됨</span>}
+              </>
+            )}
+          </div>
+          {cIsMine && !cIsDeleted && !isEditing && (
+            <PostMenu onEdit={() => { setIsEditing(true); setEditContent(c.content); setMenuOpen(false); }}
+              onDelete={handleDelete}
+              isOpen={menuOpen} onToggle={() => setMenuOpen(o => !o)} />
+          )}
+        </div>
+
+        {cIsDeleted ? (
+          <p className="text-xs italic mt-0.5" style={{ color: '#B0B5C0' }}>삭제된 댓글입니다.</p>
+        ) : isEditing ? (
+          <div className="mt-1">
+            <textarea value={editContent} onChange={e => setEditContent(e.target.value)} maxLength={300} rows={2}
+              className="w-full px-2.5 py-1.5 rounded-lg text-sm outline-none resize-none focus:ring-1"
+              style={{ background: '#FFFBF0', border: '1.5px solid #FF7A59' }}
+              autoFocus />
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-[10px]" style={{ color: '#8893A8' }}>{editContent.length} / 300</span>
+              <div className="flex gap-1.5">
+                <button onClick={() => { setIsEditing(false); setEditContent(c.content); }}
+                  className="text-[11px] px-2 py-1 rounded-full"
+                  style={{ background: 'white', border: '1px solid #EADFC7', color: '#6B7489' }}>
+                  취소
+                </button>
+                <button onClick={handleEditSave}
+                  disabled={savingEdit || !editContent.trim() || editContent.trim() === c.content}
+                  className="text-[11px] px-2 py-1 rounded-full inline-flex items-center gap-1"
+                  style={{
+                    background: '#FF7A59', color: 'white', fontWeight: 700,
+                    opacity: (savingEdit || !editContent.trim() || editContent.trim() === c.content) ? 0.5 : 1,
+                  }}>
+                  <Save className="w-2.5 h-2.5" /> {savingEdit ? '...' : '저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap break-words mt-0.5" style={{ color: '#1B2541', lineHeight: 1.5 }}>
+            <Highlighted text={c.content} highlight={highlight} />
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
