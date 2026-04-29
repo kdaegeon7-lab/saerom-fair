@@ -8,7 +8,8 @@ import {
   Lock, Hash, Briefcase, ShieldCheck, Search,
   QrCode, Camera, Crown, Medal, Flame, TrendingUp,
   CheckCircle2, Download, Edit3, BarChart3, Wand2,
-  MoreVertical, Trash2, Save
+  MoreVertical, Trash2, Save,
+  Settings, KeyRound, AlertTriangle, BarChart, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './supabase';
 
@@ -317,12 +318,13 @@ export default function App() {
 
       {!isSupabaseConfigured && <SupabaseWarning />}
 
-      <Header onHome={() => setPage('home')} page={page} user={user} onLogout={handleLogout} />
+      <Header onHome={() => setPage('home')} page={page} user={user} onLogout={handleLogout} onAdmin={user?.is_admin ? () => setPage('admin') : null} />
       <div className="fade-in flex-1">
         {page === 'home' && <Home onNavigate={setPage} user={user} />}
         {page === 'simulation' && <Simulation onBack={() => setPage('home')} user={user} />}
         {page === 'programs' && <Programs onBack={() => setPage('home')} />}
         {page === 'fair' && <Fair onBack={() => setPage('home')} user={user} />}
+        {page === 'admin' && user?.is_admin && <AdminPanel onBack={() => setPage('home')} user={user} />}
       </div>
       <Footer />
     </div>
@@ -337,7 +339,7 @@ function SupabaseWarning() {
   );
 }
 
-function Header({ onHome, page, user, onLogout }) {
+function Header({ onHome, page, user, onLogout, onAdmin }) {
   return (
     <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: 'rgba(255,251,240,0.9)', borderBottom: '1px solid #F0E6D2' }}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
@@ -349,23 +351,47 @@ function Header({ onHome, page, user, onLogout }) {
         </button>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: '#FFF3E0', border: '1.5px solid #FFC93C' }}>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full"
+            style={{
+              background: user.is_admin ? '#1B2541' : '#FFF3E0',
+              border: `1.5px solid ${user.is_admin ? '#FFC93C' : '#FFC93C'}`,
+            }}>
             <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
               style={{ background: avatarColor(user.nickname) }}>
               {user.nickname.slice(0, 1).toUpperCase()}
             </div>
             <div className="text-xs leading-tight">
-              <div className="font-bold" style={{ color: '#1B2541' }}>{user.nickname}</div>
-              <div style={{ color: '#8893A8' }}>{user.student_id}</div>
+              <div className="font-bold flex items-center gap-1" style={{ color: user.is_admin ? '#FFC93C' : '#1B2541' }}>
+                {user.nickname}
+                {user.is_admin && <ShieldCheck className="w-3 h-3" />}
+              </div>
+              <div style={{ color: user.is_admin ? '#A8B0BF' : '#8893A8' }}>{user.student_id}</div>
             </div>
           </div>
-          <div className="sm:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: '#FFF3E0', border: '1.5px solid #FFC93C' }}>
+          <div className="sm:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+            style={{
+              background: user.is_admin ? '#1B2541' : '#FFF3E0',
+              border: '1.5px solid #FFC93C',
+            }}>
             <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
               style={{ background: avatarColor(user.nickname) }}>
               {user.nickname.slice(0, 1).toUpperCase()}
             </div>
-            <span className="text-[11px] font-bold" style={{ color: '#1B2541' }}>{user.nickname}</span>
+            <span className="text-[11px] font-bold flex items-center gap-1" style={{ color: user.is_admin ? '#FFC93C' : '#1B2541' }}>
+              {user.nickname}
+              {user.is_admin && <ShieldCheck className="w-3 h-3" />}
+            </span>
           </div>
+
+          {/* 관리자만 보이는 관리 패널 진입 버튼 */}
+          {onAdmin && page !== 'admin' && (
+            <button onClick={onAdmin} title="관리자 패널"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition"
+              style={{ background: '#1B2541', color: '#FFC93C' }}>
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+
           {page !== 'home' && (
             <button onClick={onHome} className="hidden sm:inline-block text-sm px-3 py-1.5 rounded-full hover:bg-white transition" style={{ color: '#6B7489' }}>
               홈으로
@@ -634,9 +660,21 @@ function AuthScreen({ onLogin }) {
                 </p>
               )}
               {mode === 'signup' && (
-                <p className="text-xs text-center pt-1" style={{ color: '#8893A8' }}>
-                  비밀번호는 잊어버리지 않게 꼭 기억해주세요!
-                </p>
+                <>
+                  <div className="p-3 rounded-xl text-xs leading-relaxed"
+                    style={{ background: '#FFF3E0', border: '1.5px solid #FFC93C', color: '#8B6814' }}>
+                    <div className="flex items-start gap-1.5">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-1">박람회 이용 안내</p>
+                        <p>커뮤니티에는 <b>박람회·진로·과목 선택과 무관한 글</b>이나 <b>학교폭력으로 보일 수 있는 글</b>은 절대 작성하지 않습니다. 위반 시 글이 삭제되고 학생부에 통보될 수 있습니다.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-center pt-1" style={{ color: '#8893A8' }}>
+                    비밀번호는 잊어버리지 않게 꼭 기억해주세요!
+                  </p>
+                </>
               )}
             </div>
           </div>
@@ -1441,6 +1479,43 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
   );
 }
 
+// ============ 관리자 패널 (임시 placeholder, 다음 작업에서 본격 구현) ============
+function AdminPanel({ onBack, user }) {
+  return (
+    <main className="max-w-5xl mx-auto px-6 pt-8 pb-8">
+      <BackButton onBack={onBack} />
+      <div className="mb-8">
+        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-4"
+          style={{ background: '#1B2541', color: '#FFC93C' }}>
+          <ShieldCheck className="w-3 h-3 inline -mt-0.5 mr-1" />
+          ADMIN
+        </span>
+        <h2 className="font-display text-4xl mb-3">관리자 패널</h2>
+        <p style={{ color: '#4A5568' }}>{user.nickname} 선생님, 환영합니다.</p>
+      </div>
+
+      <div className="p-8 rounded-2xl text-center"
+        style={{ background: '#FFFBF0', border: '1.5px dashed #EADFC7' }}>
+        <Settings className="w-10 h-10 mx-auto mb-3" style={{ color: '#FFC93C' }} />
+        <h3 className="font-display text-xl mb-2">곧 추가될 기능</h3>
+        <p className="text-sm mb-4" style={{ color: '#6B7489' }}>
+          학생 비밀번호 초기화, 부스 추가/관리, 가입자·글 통계 화면이 다음 업데이트에서 추가됩니다.
+        </p>
+        <p className="text-xs" style={{ color: '#8893A8' }}>
+          현재 관리자가 사용 가능한 기능:<br />
+          ✓ 모든 글/댓글 강제 삭제 (커뮤니티 화면에서 ⋮ 메뉴)
+        </p>
+      </div>
+
+      <div className="mt-6 p-4 rounded-xl text-xs"
+        style={{ background: '#FFF3E0', color: '#8B6814', border: '1px solid #FFC93C' }}>
+        <p className="font-bold mb-1">💡 Supabase 대시보드에서 직접 가능한 작업</p>
+        <p>학생 비밀번호 초기화, 부스 추가, 통계 조회 등은 현재 Supabase의 Table Editor에서 직접 하실 수 있습니다.</p>
+      </div>
+    </main>
+  );
+}
+
 function Programs({ onBack }) {
   return (
     <main className="max-w-6xl mx-auto px-6 pt-8 pb-8">
@@ -1661,13 +1736,19 @@ function Fair({ onBack, user }) {
     return !error;
   };
 
-  // 게시글 삭제 (soft delete)
-  const deletePost = async (postId) => {
+  // 게시글 삭제 (soft delete, 본인이거나 관리자만 가능)
+  const deletePost = async (postId, isAdminDeletion = false) => {
     if (!isSupabaseConfigured) return false;
-    const { error } = await supabase.from('posts')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', postId)
-      .eq('student_id', user.student_id);
+    const update = {
+      deleted_at: new Date().toISOString(),
+      deleted_by: isAdminDeletion ? 'admin' : 'self',
+    };
+    let q = supabase.from('posts').update(update).eq('id', postId);
+    // 관리자 삭제가 아니면 본인 글만 삭제 가능
+    if (!isAdminDeletion || !user.is_admin) {
+      q = q.eq('student_id', user.student_id);
+    }
+    const { error } = await q;
     return !error;
   };
 
@@ -1681,13 +1762,18 @@ function Fair({ onBack, user }) {
     return !error;
   };
 
-  // 댓글 삭제 (soft delete)
-  const deleteComment = async (commentId) => {
+  // 댓글 삭제 (soft delete, 본인이거나 관리자만 가능)
+  const deleteComment = async (commentId, isAdminDeletion = false) => {
     if (!isSupabaseConfigured) return false;
-    const { error } = await supabase.from('post_comments')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', commentId)
-      .eq('student_id', user.student_id);
+    const update = {
+      deleted_at: new Date().toISOString(),
+      deleted_by: isAdminDeletion ? 'admin' : 'self',
+    };
+    let q = supabase.from('post_comments').update(update).eq('id', commentId);
+    if (!isAdminDeletion || !user.is_admin) {
+      q = q.eq('student_id', user.student_id);
+    }
+    const { error } = await q;
     return !error;
   };
 
@@ -2244,7 +2330,10 @@ function PostCard({ post, user, highlight, onToggleLike, onAddComment,
   const hasLiked = user && likes.includes(user.student_id);
   const time = new Date(post.created_at).getTime();
   const isMine = user && post.student_id === user.student_id;
+  const isAdmin = user?.is_admin;
+  const canManage = isMine || isAdmin; // 본인이거나 관리자면 수정/삭제 가능
   const isDeleted = Boolean(post.deleted_at);
+  const isAdminDeleted = isDeleted && post.deleted_by === 'admin';
   const isEdited = Boolean(post.updated_at) && !isDeleted;
 
   // 검색 시 댓글에 매칭되는 게 있으면 자동으로 댓글 펼침
@@ -2268,8 +2357,12 @@ function PostCard({ post, user, highlight, onToggleLike, onAddComment,
   };
 
   const handleDelete = async () => {
-    if (!confirm('이 글을 삭제할까요?\n삭제된 글은 "삭제된 글입니다"로 표시되며, 받은 추천이나 포인트는 유지됩니다.')) return;
-    const ok = await onDeletePost(post.id);
+    const isAdminAction = isAdmin && !isMine;
+    const message = isAdminAction
+      ? `[관리자] 이 글을 삭제할까요?\n작성자: ${post.nickname} (${post.student_id})\n삭제된 글은 "관리자에 의해 삭제됨"으로 표시됩니다.`
+      : '이 글을 삭제할까요?\n삭제된 글은 "삭제된 글입니다"로 표시되며, 받은 추천이나 포인트는 유지됩니다.';
+    if (!confirm(message)) return;
+    const ok = await onDeletePost(post.id, isAdminAction);
     setMenuOpen(false);
     if (!ok) alert('삭제에 실패했어요. 다시 시도해주세요.');
   };
@@ -2304,9 +2397,10 @@ function PostCard({ post, user, highlight, onToggleLike, onAddComment,
               )}
             </div>
 
-            {/* 본인 글에만 ⋮ 메뉴 */}
-            {isMine && !isDeleted && !isEditing && (
-              <PostMenu onEdit={() => { setIsEditing(true); setEditContent(post.content); setMenuOpen(false); }}
+            {/* 본인 글이거나 관리자면 ⋮ 메뉴 표시. 관리자가 남의 글 수정은 불가, 삭제만 가능 */}
+            {canManage && !isDeleted && !isEditing && (
+              <PostMenu
+                onEdit={isMine ? () => { setIsEditing(true); setEditContent(post.content); setMenuOpen(false); } : null}
                 onDelete={handleDelete}
                 isOpen={menuOpen} onToggle={() => setMenuOpen(o => !o)} />
             )}
@@ -2315,7 +2409,7 @@ function PostCard({ post, user, highlight, onToggleLike, onAddComment,
           {/* 본문 또는 수정 폼 또는 삭제 안내 */}
           {isDeleted ? (
             <p className="text-sm italic mb-3 py-2" style={{ color: '#B0B5C0' }}>
-              삭제된 글입니다.
+              {isAdminDeleted ? '⚠️ 관리자에 의해 삭제된 글입니다.' : '삭제된 글입니다.'}
             </p>
           ) : isEditing ? (
             <div className="mb-3">
@@ -2416,14 +2510,16 @@ function PostMenu({ onEdit, onDelete, isOpen, onToggle }) {
       {isOpen && (
         <div className="absolute right-0 top-8 z-20 rounded-xl overflow-hidden min-w-[100px]"
           style={{ background: 'white', border: '1.5px solid #EADFC7', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-          <button onClick={onEdit}
-            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50"
-            style={{ color: '#1B2541' }}>
-            <Edit3 className="w-3.5 h-3.5" /> 수정
-          </button>
+          {onEdit && (
+            <button onClick={onEdit}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50"
+              style={{ color: '#1B2541' }}>
+              <Edit3 className="w-3.5 h-3.5" /> 수정
+            </button>
+          )}
           <button onClick={onDelete}
             className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-red-50"
-            style={{ color: '#E74C3C', borderTop: '1px solid #F0E6D2' }}>
+            style={{ color: '#E74C3C', borderTop: onEdit ? '1px solid #F0E6D2' : 'none' }}>
             <Trash2 className="w-3.5 h-3.5" /> 삭제
           </button>
         </div>
@@ -2441,7 +2537,10 @@ function CommentRow({ comment: c, user, highlight, onEditComment, onDeleteCommen
 
   const ct = new Date(c.created_at).getTime();
   const cIsMine = user && c.student_id === user.student_id;
+  const cIsAdmin = user?.is_admin;
+  const cCanManage = cIsMine || cIsAdmin;
   const cIsDeleted = Boolean(c.deleted_at);
+  const cIsAdminDeleted = cIsDeleted && c.deleted_by === 'admin';
   const cIsEdited = Boolean(c.updated_at) && !cIsDeleted;
 
   const handleEditSave = async () => {
@@ -2455,8 +2554,12 @@ function CommentRow({ comment: c, user, highlight, onEditComment, onDeleteCommen
   };
 
   const handleDelete = async () => {
-    if (!confirm('이 댓글을 삭제할까요?')) return;
-    const ok = await onDeleteComment(c.id);
+    const isAdminAction = cIsAdmin && !cIsMine;
+    const message = isAdminAction
+      ? `[관리자] 이 댓글을 삭제할까요?\n작성자: ${c.nickname} (${c.student_id})`
+      : '이 댓글을 삭제할까요?';
+    if (!confirm(message)) return;
+    const ok = await onDeleteComment(c.id, isAdminAction);
     setMenuOpen(false);
     if (!ok) alert('삭제에 실패했어요.');
   };
@@ -2485,15 +2588,18 @@ function CommentRow({ comment: c, user, highlight, onEditComment, onDeleteCommen
               </>
             )}
           </div>
-          {cIsMine && !cIsDeleted && !isEditing && (
-            <PostMenu onEdit={() => { setIsEditing(true); setEditContent(c.content); setMenuOpen(false); }}
+          {cCanManage && !cIsDeleted && !isEditing && (
+            <PostMenu
+              onEdit={cIsMine ? () => { setIsEditing(true); setEditContent(c.content); setMenuOpen(false); } : null}
               onDelete={handleDelete}
               isOpen={menuOpen} onToggle={() => setMenuOpen(o => !o)} />
           )}
         </div>
 
         {cIsDeleted ? (
-          <p className="text-xs italic mt-0.5" style={{ color: '#B0B5C0' }}>삭제된 댓글입니다.</p>
+          <p className="text-xs italic mt-0.5" style={{ color: '#B0B5C0' }}>
+            {cIsAdminDeleted ? '⚠️ 관리자에 의해 삭제된 댓글입니다.' : '삭제된 댓글입니다.'}
+          </p>
         ) : isEditing ? (
           <div className="mt-1">
             <textarea value={editContent} onChange={e => setEditContent(e.target.value)} maxLength={300} rows={2}
@@ -2643,6 +2749,15 @@ function Composer({ onSubmit, user }) {
         </div>
 
         <div className="relative space-y-3">
+          {/* 작성 시 경고 문구 */}
+          <div className="p-3 rounded-xl text-xs leading-relaxed flex items-start gap-2"
+            style={{ background: '#FFE4E4', border: '1.5px solid #E74C3C', color: '#A82F2F' }}>
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <p>
+              <b>박람회·진로·과목과 무관한 글</b> 또는 <b>학교폭력으로 보일 수 있는 글</b>은 절대 작성하지 마세요.
+              관리자가 즉시 삭제하며, 학생부에 통보될 수 있습니다.
+            </p>
+          </div>
           <textarea value={content} onChange={e => setContent(e.target.value)} maxLength={500} rows={4}
             placeholder="오늘 박람회에서 인상 깊었던 부스, 선택과목 팁, 친구들에게 공유하고 싶은 정보... 무엇이든 자유롭게!"
             className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none transition focus:ring-2"
