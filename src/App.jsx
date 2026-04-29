@@ -224,6 +224,59 @@ const TYPE_COLORS = {
   '융합선택': { bg: '#F3E5F5', fg: '#7B1FA2' },
 };
 
+// 융합 선택 중 석차등급이 산출되지 않는 사회·과학 9과목
+// (출처: 2022 개정 교육과정 학교생활기록부 기재 규정)
+const NO_RANK_FUSION_SUBJECTS = new Set([
+  // 사회 5과목
+  '여행지리',
+  '역사로 탐구하는 현대 세계',
+  '사회문제 탐구',
+  '금융과 경제생활',
+  '윤리문제 탐구',
+  '기후변화와 지속가능한 세계',
+  // 과학 4과목 (사회과 1개 추가 = 9과목)
+  '과학의 역사와 문화',
+  '기후변화와 환경생태',
+  '융합과학 탐구',
+]);
+
+/**
+ * 과목의 평가 방식 정보를 반환한다.
+ * @returns {{
+ *   hasRank: boolean,        // 5등급 석차 산출 여부
+ *   achievementLevels: 5|3|1, // 성취도 단계 (5=A~E, 3=A~C, 1=P)
+ *   label: string,           // 짧은 라벨 (예: '5등급', '3단계', 'P')
+ *   detail: string,          // 자세한 설명
+ * }}
+ */
+function getEvaluationInfo(subject) {
+  // 체육·예술 → 3단계 성취도, 석차등급 없음
+  if (subject.group === '체육' || subject.group === '예술') {
+    return {
+      hasRank: false,
+      achievementLevels: 3,
+      label: '3단계',
+      detail: '성취도 A·B·C 3단계 평가, 석차등급 없음',
+    };
+  }
+  // 융합선택 중 사회·과학 9과목 → 5단계 성취도이지만 석차등급은 산출 안 함
+  if (subject.type === '융합선택' && NO_RANK_FUSION_SUBJECTS.has(subject.name)) {
+    return {
+      hasRank: false,
+      achievementLevels: 5,
+      label: '등급X',
+      detail: '성취도(A~E)는 부여되지만 석차등급은 산출되지 않는 융합선택 과목',
+    };
+  }
+  // 그 외 모든 보통교과 과목 → 5등급
+  return {
+    hasRank: true,
+    achievementLevels: 5,
+    label: '5등급',
+    detail: '석차등급(1~5)이 산출되는 과목',
+  };
+}
+
 const PROGRAMS = [
   { icon: Compass, color: '#FF7A59', title: '진로 탐색 프로그램', desc: '계열별 맞춤 멘토링, 대학·학과 탐방, 직업인 초청 특강으로 나만의 진로 지도를 그려봅니다.', tags: ['진로', '멘토링'] },
   { icon: Lightbulb, color: '#2B7FFF', title: '수학과학중점 심화', desc: '수학·과학 중점 과정 운영으로 이공계열 진학을 준비하는 학생을 위한 심화 프로그램.', tags: ['중점', '이공계'] },
@@ -927,6 +980,9 @@ function Simulation({ onBack, user }) {
 
       <ProgressSummary groups={visibleGroups} selected={selected} />
 
+      {/* 평가방식 범례 */}
+      <EvaluationLegend />
+
       <div className="mt-8 space-y-10">
         {[2, 3].filter(g => cohort === 'g1' || g === 3).map(grade => (
           <GradeSection key={grade} grade={grade}
@@ -1051,6 +1107,7 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
           const groupColor = GROUP_COLORS[s.group] || '#8893A8';
           const typeColor = TYPE_COLORS[s.type];
           const hasPdf = Boolean(SUBJECT_PDFS[s.name]);
+          const evalInfo = getEvaluationInfo(s);
 
           return (
             <div key={s.name} className="inline-flex items-stretch rounded-xl overflow-hidden"
@@ -1073,6 +1130,8 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
                   }}>
                     {s.type.replace('선택', '')}
                   </span>
+                  {/* 평가방식 배지 */}
+                  <EvalBadge evalInfo={evalInfo} on={on} />
                   {s.math && <span className="text-[10px]" title="수학중점">🔢</span>}
                   {s.sci && <span className="text-[10px]" title="과학중점">🔬</span>}
                 </span>
@@ -1096,6 +1155,105 @@ function ChoiceGroupCard({ group, selected, onToggle }) {
 
       {pdfSubject && <PdfModal subject={pdfSubject} onClose={() => setPdfSubject(null)} />}
     </div>
+  );
+}
+
+// ============ 평가방식 범례 (시뮬레이션 화면 상단) ============
+function EvaluationLegend() {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="mt-4 rounded-2xl overflow-hidden"
+      style={{ background: 'white', border: '1.5px solid #EADFC7' }}>
+      <button onClick={() => setExpanded(e => !e)}
+        className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center" style={{ background: '#FFF3E0' }}>
+            <BarChart3 className="w-4 h-4" style={{ color: '#F57C00' }} />
+          </div>
+          <span className="font-display text-sm">⚠ 과목별 성적 처리 방식 안내 (꼭 확인)</span>
+        </div>
+        <ChevronRight className="w-4 h-4 transition-transform flex-shrink-0"
+          style={{ color: '#8893A8', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }} />
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 text-xs" style={{ color: '#4A5568' }}>
+          <p className="leading-relaxed">
+            과목 옆 배지로 성적 처리 방식을 표시합니다. <b>대학 입시에 영향을 주는 중요한 정보</b>이니 꼭 확인하세요.
+          </p>
+
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5"
+                style={{ background: '#F0E6D2', color: '#6B7489' }}>5등급</span>
+              <p>국어·수학·영어·사회·과학 등 대부분의 보통교과 과목. 석차등급 1~5등급이 산출됩니다.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5 inline-flex items-center gap-0.5"
+                style={{ background: '#FFE4E4', color: '#C53030', border: '1px solid #FCA5A5' }}>⚠ 등급X</span>
+              <div>
+                <p className="font-bold mb-1" style={{ color: '#C53030' }}>융합선택 중 사회·과학 9과목 (석차등급 산출 안 됨)</p>
+                <p className="leading-relaxed">성취도(A~E)는 부여되지만 <b>석차등급은 산출되지 않습니다</b>. 입시 정량 평가에서 불리할 수 있어 신중히 선택하세요.</p>
+                <p className="mt-1.5 leading-relaxed" style={{ color: '#6B7489' }}>
+                  해당 과목: 여행지리 · 역사로 탐구하는 현대 세계 · 사회문제 탐구 · 금융과 경제생활 · 윤리문제 탐구 · 기후변화와 지속가능한 세계 · 과학의 역사와 문화 · 기후변화와 환경생태 · 융합과학 탐구
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5"
+                style={{ background: '#F3E5F5', color: '#7B1FA2' }}>3단계</span>
+              <p>체육·예술 교과(군). 성취도 A·B·C 3단계로 평가되며 석차등급이 없습니다.</p>
+            </div>
+          </div>
+
+          <p className="text-[11px] italic pt-2 border-t" style={{ color: '#8893A8', borderColor: '#F0E6D2' }}>
+            ※ 출처: 2022 개정 교육과정 학교생활기록부 기재 규정 / 2025학년도 입학생을 위한 안내서
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ 평가방식 배지 ============
+function EvalBadge({ evalInfo, on }) {
+  // 5등급 → 회색 배지 (정상)
+  // 등급X (융합 9과목) → 빨강 강조 배지
+  // 3단계 (체육·예술) → 보라 배지
+  if (evalInfo.hasRank) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+        title={evalInfo.detail}
+        style={{
+          background: on ? 'rgba(255,255,255,0.22)' : '#F0E6D2',
+          color: on ? 'white' : '#6B7489',
+        }}>
+        {evalInfo.label}
+      </span>
+    );
+  }
+  if (evalInfo.label === '등급X') {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-0.5"
+        title={evalInfo.detail}
+        style={{
+          background: on ? 'rgba(255,255,255,0.25)' : '#FFE4E4',
+          color: on ? 'white' : '#C53030',
+          border: on ? '1px solid rgba(255,255,255,0.4)' : '1px solid #FCA5A5',
+        }}>
+        ⚠ 등급X
+      </span>
+    );
+  }
+  // 3단계 (체육·예술)
+  return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+      title={evalInfo.detail}
+      style={{
+        background: on ? 'rgba(255,255,255,0.22)' : '#F3E5F5',
+        color: on ? 'white' : '#7B1FA2',
+      }}>
+      {evalInfo.label}
+    </span>
   );
 }
 
@@ -1250,6 +1408,11 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
     return map;
   }, [selectedDetails]);
 
+  // 평가방식별 분류 (등급 산출 안 되는 과목 = 입시 정량평가에 영향 없는 과목)
+  const noRankSubjects = useMemo(() =>
+    selectedDetails.filter(s => !getEvaluationInfo(s).hasRank),
+  [selectedDetails]);
+
   const totalCredit = selectedDetails.reduce((s, d) => s + d.credit, 0);
   const totalCount = selectedDetails.length;
 
@@ -1355,6 +1518,7 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
                 {gs.subjects.map((s, i) => {
                   const groupColor = GROUP_COLORS[s.group] || '#8893A8';
                   const typeColor = TYPE_COLORS[s.type];
+                  const evalInfo = getEvaluationInfo(s);
                   return (
                     <div key={`${s.name}-${i}`}
                       className="p-3 rounded-xl flex items-center gap-3"
@@ -1368,6 +1532,7 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
                           }}>
                             {s.type.replace('선택', '')}
                           </span>
+                          <EvalBadge evalInfo={evalInfo} on={false} />
                           {s.math && <span className="text-[10px]" title="수학중점">🔢</span>}
                           {s.sci && <span className="text-[10px]" title="과학중점">🔬</span>}
                         </div>
@@ -1421,6 +1586,36 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
               );
             })}
           </div>
+
+          {/* 등급 산출 안 되는 과목 알림 */}
+          {noRankSubjects.length > 0 && (
+            <div className="mt-3 p-4 rounded-xl"
+              style={{ background: '#FFE4E4', border: '1.5px solid #FCA5A5' }}>
+              <div className="flex items-start gap-2 mb-2">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#C53030' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-display text-sm mb-1" style={{ color: '#C53030' }}>
+                    석차등급이 산출되지 않는 과목 {noRankSubjects.length}개를 선택했어요
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#A82F2F' }}>
+                    아래 과목들은 성취도(A~E 또는 A~C)만 부여되고 <b>석차등급은 산출되지 않습니다</b>. 입시 정량 평가에서 영향이 있을 수 있어요.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {noRankSubjects.map((s, i) => {
+                  const ev = getEvaluationInfo(s);
+                  return (
+                    <span key={`${s.name}-${i}`} className="text-[11px] px-2 py-1 rounded-full inline-flex items-center gap-1"
+                      style={{ background: 'white', color: '#C53030', border: '1px solid #FCA5A5' }}>
+                      {s.name}
+                      <span className="text-[9px] opacity-70">· {ev.label === '등급X' ? '등급X' : '3단계'}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* AI 피드백 영역 */}
