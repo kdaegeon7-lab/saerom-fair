@@ -1480,8 +1480,10 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
   );
 }
 
-// ============ 관리자 패널 (임시 placeholder, 다음 작업에서 본격 구현) ============
+// ============ 관리자 패널 ============
 function AdminPanel({ onBack, user }) {
+  const [tab, setTab] = useState('students');
+
   return (
     <main className="max-w-5xl mx-auto px-6 pt-8 pb-8">
       <BackButton onBack={onBack} />
@@ -1495,25 +1497,679 @@ function AdminPanel({ onBack, user }) {
         <p style={{ color: '#4A5568' }}>{user.nickname} 선생님, 환영합니다.</p>
       </div>
 
-      <div className="p-8 rounded-2xl text-center"
-        style={{ background: '#FFFBF0', border: '1.5px dashed #EADFC7' }}>
-        <Settings className="w-10 h-10 mx-auto mb-3" style={{ color: '#FFC93C' }} />
-        <h3 className="font-display text-xl mb-2">곧 추가될 기능</h3>
-        <p className="text-sm mb-4" style={{ color: '#6B7489' }}>
-          학생 비밀번호 초기화, 부스 추가/관리, 가입자·글 통계 화면이 다음 업데이트에서 추가됩니다.
-        </p>
-        <p className="text-xs" style={{ color: '#8893A8' }}>
-          현재 관리자가 사용 가능한 기능:<br />
-          ✓ 모든 글/댓글 강제 삭제 (커뮤니티 화면에서 ⋮ 메뉴)
+      {/* 탭 */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {[
+          { k: 'students', label: '학생 관리', icon: Users },
+          { k: 'booths', label: '부스 관리', icon: QrCode },
+          { k: 'stats', label: '통계', icon: BarChart },
+        ].map(t => {
+          const Icon = t.icon;
+          const on = tab === t.k;
+          return (
+            <button key={t.k} onClick={() => setTab(t.k)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition"
+              style={{ background: on ? '#1B2541' : '#FFFBF0', color: on ? '#FFC93C' : '#6B7489', border: '1.5px solid #EADFC7' }}>
+              <Icon className="w-4 h-4" /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === 'students' && <AdminStudents adminUser={user} />}
+      {tab === 'booths' && <AdminBooths />}
+      {tab === 'stats' && <AdminStats />}
+    </main>
+  );
+}
+
+// ============ 학생 관리 ============
+function AdminStudents({ adminUser }) {
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [resetTarget, setResetTarget] = useState(null); // 비밀번호 초기화 대상
+  const [resetDone, setResetDone] = useState(null); // 초기화 완료 표시 (임시 비밀번호 노출용)
+
+  const loadStudents = async () => {
+    if (!isSupabaseConfigured) { setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase.from('students')
+      .select('student_id, nickname, career_paths, is_admin, created_at, last_login_at')
+      .order('created_at', { ascending: false });
+    if (data) setStudents(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadStudents(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(s =>
+      (s.student_id || '').toLowerCase().includes(q) ||
+      (s.nickname || '').toLowerCase().includes(q)
+    );
+  }, [students, query]);
+
+  // 비밀번호 초기화: 임시 4자리 숫자 생성 → 해시 → DB 저장
+  const performReset = async (student) => {
+    // 4자리 임시 비밀번호 생성 (1000~9999)
+    const tempPwd = String(Math.floor(1000 + Math.random() * 9000));
+    const hash = await hashPassword(tempPwd);
+    const { error } = await supabase.from('students')
+      .update({ password_hash: hash })
+      .eq('student_id', student.student_id);
+    if (error) {
+      alert('초기화에 실패했어요. 다시 시도해주세요.');
+      return;
+    }
+    setResetDone({ student_id: student.student_id, nickname: student.nickname, tempPwd });
+    setResetTarget(null);
+  };
+
+  return (
+    <div>
+      {/* 초기화 완료 알림 (임시 비밀번호 표시) */}
+      {resetDone && (
+        <div className="mb-4 p-4 rounded-2xl"
+          style={{ background: '#DDF5EA', border: '2px solid #3BC4A0' }}>
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="w-6 h-6 flex-shrink-0 mt-0.5" style={{ color: '#3BC4A0' }} />
+            <div className="flex-1 min-w-0">
+              <p className="font-display text-base mb-1">비밀번호 초기화 완료</p>
+              <p className="text-sm mb-3" style={{ color: '#1F8868' }}>
+                <b>{resetDone.nickname}</b> ({resetDone.student_id})의 임시 비밀번호:
+              </p>
+              <div className="p-3 rounded-xl bg-white text-center mb-2" style={{ border: '1.5px solid #3BC4A0' }}>
+                <span className="font-display text-3xl tracking-[0.3em]" style={{ color: '#1B2541' }}>{resetDone.tempPwd}</span>
+              </div>
+              <p className="text-xs" style={{ color: '#1F8868' }}>
+                💡 이 비밀번호를 학생에게 직접 전달하세요. 학생이 로그인 후 새 비밀번호로 변경하도록 안내해주세요. (현재는 변경 기능이 없어 한 번 더 초기화 필요)
+              </p>
+            </div>
+            <button onClick={() => setResetDone(null)}
+              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white"
+              style={{ color: '#1F8868' }}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 초기화 확인 모달 */}
+      {resetTarget && (
+        <ConfirmModal
+          title="비밀번호 초기화"
+          message={`'${resetTarget.nickname}' (${resetTarget.student_id}) 학생의 비밀번호를 임시 4자리로 초기화할까요?\n\n초기화 후 임시 비밀번호가 화면에 표시되니, 학생에게 직접 전달해주세요.`}
+          confirmLabel="초기화"
+          confirmColor="#FF7A59"
+          onConfirm={() => performReset(resetTarget)}
+          onCancel={() => setResetTarget(null)}
+        />
+      )}
+
+      {/* 검색 */}
+      <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-full"
+        style={{ background: 'white', border: '1.5px solid #EADFC7' }}>
+        <Search className="w-4 h-4" style={{ color: '#8893A8' }} />
+        <input value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="학번 또는 닉네임으로 검색"
+          className="flex-1 text-sm outline-none bg-transparent" />
+        {query && (
+          <button onClick={() => setQuery('')} className="w-5 h-5 rounded-full hover:bg-gray-100 flex items-center justify-center" style={{ color: '#8893A8' }}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+        <button onClick={loadStudents} title="새로고침"
+          className="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center" style={{ color: '#8893A8' }}>
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <p className="text-xs mb-3" style={{ color: '#8893A8' }}>
+        가입한 학생 {students.length}명 {query && `· 검색 결과 ${filtered.length}명`}
+      </p>
+
+      {loading ? (
+        <div className="p-8 text-center text-sm" style={{ color: '#8893A8' }}>불러오는 중...</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-8 text-center rounded-2xl" style={{ background: '#FFFBF0', border: '1.5px dashed #EADFC7' }}>
+          <Users className="w-7 h-7 mx-auto mb-2" style={{ color: '#EADFC7' }} />
+          <p className="text-sm" style={{ color: '#8893A8' }}>{query ? '일치하는 학생이 없어요.' : '아직 가입한 학생이 없어요.'}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(s => (
+            <StudentRow key={s.student_id} student={s}
+              isMe={s.student_id === adminUser.student_id}
+              onResetPassword={() => setResetTarget(s)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentRow({ student: s, isMe, onResetPassword }) {
+  const created = new Date(s.created_at);
+  const lastLogin = s.last_login_at ? new Date(s.last_login_at) : null;
+  const careers = (s.career_paths || []).filter(Boolean);
+
+  return (
+    <div className="p-4 rounded-2xl flex items-center gap-3"
+      style={{
+        background: s.is_admin ? '#FFF3E0' : 'white',
+        border: `1.5px solid ${s.is_admin ? '#FFC93C' : '#F0E6D2'}`
+      }}>
+      <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold text-white"
+        style={{ background: avatarColor(s.nickname) }}>
+        {s.nickname.slice(0, 1).toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+          <span className="font-bold text-sm">{s.nickname}</span>
+          <span className="text-[11px] px-1.5 rounded-full" style={{ background: '#FFFBF0', color: '#8893A8', border: '1px solid #EADFC7' }}>
+            {s.student_id}
+          </span>
+          {s.is_admin && (
+            <span className="text-[10px] px-1.5 rounded-full font-bold inline-flex items-center gap-0.5"
+              style={{ background: '#1B2541', color: '#FFC93C' }}>
+              <ShieldCheck className="w-2.5 h-2.5" /> 관리자
+            </span>
+          )}
+          {isMe && <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#FFC93C', color: '#1B2541' }}>나</span>}
+        </div>
+        {careers.length > 0 && (
+          <p className="text-xs mb-0.5" style={{ color: '#6B7489' }}>희망 진로: {careers.join(', ')}</p>
+        )}
+        <p className="text-[11px]" style={{ color: '#8893A8' }}>
+          가입 {formatTime(created.getTime())}
+          {lastLogin && ` · 최근 ${formatTime(lastLogin.getTime())}`}
         </p>
       </div>
+      {!isMe && !s.is_admin && (
+        <button onClick={onResetPassword}
+          className="text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1 transition hover:scale-105 flex-shrink-0"
+          style={{ background: '#FF7A59', color: 'white', fontWeight: 700 }}>
+          <KeyRound className="w-3 h-3" /> 비밀번호 초기화
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ============ 부스 관리 ============
+function AdminBooths() {
+  const [booths, setBooths] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+
+  const loadBooths = async () => {
+    if (!isSupabaseConfigured) { setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase.from('booths')
+      .select('*').order('category').order('name');
+    if (data) setBooths(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadBooths(); }, []);
+
+  const subjectBooths = booths.filter(b => b.category === 'subject');
+  const seniorBooths = booths.filter(b => b.category === 'senior');
+
+  const toggleActive = async (booth) => {
+    await supabase.from('booths').update({ is_active: !booth.is_active }).eq('code', booth.code);
+    loadBooths();
+  };
+
+  return (
+    <div>
+      {showAdd && (
+        <BoothForm
+          onClose={() => setShowAdd(false)}
+          onSaved={() => { setShowAdd(false); loadBooths(); }}
+        />
+      )}
+      {editTarget && (
+        <BoothForm booth={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); loadBooths(); }}
+        />
+      )}
+
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <p className="text-xs" style={{ color: '#8893A8' }}>
+          전체 {booths.length}개 · 활성 {booths.filter(b => b.is_active).length}개
+        </p>
+        <div className="flex gap-2">
+          <button onClick={loadBooths} title="새로고침"
+            className="w-9 h-9 rounded-full flex items-center justify-center"
+            style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button onClick={() => setShowAdd(true)}
+            className="text-sm px-3 py-2 rounded-full inline-flex items-center gap-1.5 transition hover:scale-105"
+            style={{ background: '#FF7A59', color: 'white', fontWeight: 700 }}>
+            <Plus className="w-3.5 h-3.5" /> 부스 추가
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-sm" style={{ color: '#8893A8' }}>불러오는 중...</div>
+      ) : (
+        <div className="space-y-6">
+          <div>
+            <h4 className="font-display text-base mb-2 flex items-center gap-2">
+              <BookOpen className="w-4 h-4" style={{ color: '#FF7A59' }} />
+              과목별 부스 ({subjectBooths.length}개)
+            </h4>
+            <div className="space-y-2">
+              {subjectBooths.length === 0 ? (
+                <p className="text-xs italic px-3" style={{ color: '#8893A8' }}>등록된 부스가 없어요.</p>
+              ) : subjectBooths.map(b => (
+                <BoothRow key={b.code} booth={b}
+                  onEdit={() => setEditTarget(b)}
+                  onToggle={() => toggleActive(b)} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-display text-base mb-2 flex items-center gap-2">
+              <Users className="w-4 h-4" style={{ color: '#2B7FFF' }} />
+              선배 부스 ({seniorBooths.length}개)
+            </h4>
+            <div className="space-y-2">
+              {seniorBooths.length === 0 ? (
+                <p className="text-xs italic px-3" style={{ color: '#8893A8' }}>등록된 부스가 없어요.</p>
+              ) : seniorBooths.map(b => (
+                <BoothRow key={b.code} booth={b}
+                  onEdit={() => setEditTarget(b)}
+                  onToggle={() => toggleActive(b)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 p-4 rounded-xl text-xs"
         style={{ background: '#FFF3E0', color: '#8B6814', border: '1px solid #FFC93C' }}>
-        <p className="font-bold mb-1">💡 Supabase 대시보드에서 직접 가능한 작업</p>
-        <p>학생 비밀번호 초기화, 부스 추가, 통계 조회 등은 현재 Supabase의 Table Editor에서 직접 하실 수 있습니다.</p>
+        <p className="font-bold mb-1">💡 부스 관리 안내</p>
+        <p className="leading-relaxed">
+          · 부스 <b>코드는 한 번 만들면 변경 불가</b>합니다 (학생 방문 기록 보호).<br/>
+          · 부스 이름·활성화 여부만 변경 가능.<br/>
+          · 부스 비활성화 시 학생 미션 화면에서 사라지고 QR 적립도 막힙니다.<br/>
+          · 새 부스를 추가하면 <b>새 QR을 인쇄해서 부착</b>해야 학생들이 이용할 수 있어요.
+        </p>
       </div>
-    </main>
+    </div>
+  );
+}
+
+function BoothRow({ booth: b, onEdit, onToggle }) {
+  return (
+    <div className="p-3 rounded-xl flex items-center gap-3"
+      style={{
+        background: b.is_active ? 'white' : '#FAFAF5',
+        border: `1.5px solid ${b.is_active ? '#F0E6D2' : '#EADFC7'}`,
+        opacity: b.is_active ? 1 : 0.7,
+      }}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+          <span className="font-bold text-sm">{b.name}</span>
+          {!b.is_active && (
+            <span className="text-[10px] px-1.5 rounded-full font-bold" style={{ background: '#F0E6D2', color: '#8893A8' }}>
+              비활성
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] font-mono" style={{ color: '#8893A8' }}>코드: {b.code} · {b.points}P</p>
+      </div>
+      <button onClick={onToggle} title={b.is_active ? '비활성화' : '활성화'}
+        className="w-9 h-9 rounded-full flex items-center justify-center transition hover:bg-gray-100">
+        {b.is_active
+          ? <ToggleRight className="w-5 h-5" style={{ color: '#3BC4A0' }} />
+          : <ToggleLeft className="w-5 h-5" style={{ color: '#8893A8' }} />}
+      </button>
+      <button onClick={onEdit} title="수정"
+        className="w-9 h-9 rounded-full flex items-center justify-center transition hover:bg-gray-100"
+        style={{ color: '#6B7489' }}>
+        <Edit3 className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function BoothForm({ booth, onClose, onSaved }) {
+  const isEdit = Boolean(booth);
+  const [code, setCode] = useState(booth?.code || '');
+  const [name, setName] = useState(booth?.name || '');
+  const [category, setCategory] = useState(booth?.category || 'subject');
+  const [points, setPoints] = useState(booth?.points || 10);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setError('');
+    const trimmedCode = code.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    if (!trimmedName) return setError('부스 이름을 입력해주세요.');
+
+    if (isEdit) {
+      // 수정: 이름·활성화·포인트만 변경 가능 (코드 변경 불가)
+      setSaving(true);
+      const { error: e } = await supabase.from('booths')
+        .update({ name: trimmedName, points: parseInt(points, 10) || 10 })
+        .eq('code', booth.code);
+      setSaving(false);
+      if (e) return setError('수정 중 오류가 발생했어요.');
+      onSaved();
+    } else {
+      // 추가: 코드 검증 + 중복 확인
+      if (!/^[a-z0-9-]+$/.test(trimmedCode)) {
+        return setError('코드는 영문 소문자, 숫자, 하이픈(-)만 사용할 수 있어요.');
+      }
+      if (trimmedCode.length < 3) return setError('코드는 3자 이상이어야 해요.');
+
+      setSaving(true);
+      // 중복 확인
+      const { data: existing } = await supabase.from('booths')
+        .select('code').eq('code', trimmedCode).maybeSingle();
+      if (existing) {
+        setSaving(false);
+        return setError('이미 사용 중인 코드예요. 다른 코드를 입력해주세요.');
+      }
+      const { error: e } = await supabase.from('booths').insert({
+        code: trimmedCode,
+        name: trimmedName,
+        category,
+        points: parseInt(points, 10) || 10,
+        is_active: true,
+      });
+      setSaving(false);
+      if (e) return setError('추가 중 오류가 발생했어요.');
+      onSaved();
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background: 'rgba(27,37,65,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}>
+      <div className="relative w-full max-w-md rounded-2xl overflow-hidden" style={{ background: 'white' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3"
+          style={{ background: '#FFFBF0', borderBottom: '1.5px solid #F0E6D2' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#FFF3E0' }}>
+              <QrCode className="w-5 h-5" style={{ color: '#FF7A59' }} />
+            </div>
+            <h3 className="font-display text-lg">{isEdit ? '부스 수정' : '부스 추가'}</h3>
+          </div>
+          <button onClick={onClose}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+            style={{ color: '#6B7489' }}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div>
+            <label className="text-xs font-bold block mb-1" style={{ color: '#1B2541' }}>
+              부스 코드 (QR 텍스트) <span style={{ color: '#FF7A59' }}>*</span>
+            </label>
+            <input value={code} onChange={e => setCode(e.target.value)} disabled={isEdit}
+              placeholder="예: subject-philosophy"
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-2 font-mono"
+              style={{
+                background: isEdit ? '#FAFAF5' : 'white',
+                border: '1.5px solid #EADFC7',
+                color: isEdit ? '#8893A8' : '#1B2541',
+              }} />
+            <p className="text-[10px] mt-1" style={{ color: '#8893A8' }}>
+              {isEdit ? '코드는 변경할 수 없어요.' : '영문 소문자, 숫자, 하이픈만. QR 코드에 들어갈 텍스트입니다.'}
+            </p>
+          </div>
+          <div>
+            <label className="text-xs font-bold block mb-1" style={{ color: '#1B2541' }}>
+              부스 이름 <span style={{ color: '#FF7A59' }}>*</span>
+            </label>
+            <input value={name} onChange={e => setName(e.target.value)} maxLength={40}
+              placeholder="예: 철학 부스"
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-2"
+              style={{ background: 'white', border: '1.5px solid #EADFC7' }} />
+          </div>
+          <div>
+            <label className="text-xs font-bold block mb-1" style={{ color: '#1B2541' }}>
+              부스 종류 {isEdit && <span className="text-[10px] font-normal" style={{ color: '#8893A8' }}>(변경 불가)</span>}
+            </label>
+            <div className="flex gap-2">
+              {[
+                { v: 'subject', label: '과목별 부스', color: '#FF7A59' },
+                { v: 'senior', label: '선배 부스', color: '#2B7FFF' },
+              ].map(opt => (
+                <button key={opt.v} onClick={() => !isEdit && setCategory(opt.v)} disabled={isEdit}
+                  className="flex-1 py-2 rounded-lg text-sm font-bold transition"
+                  style={{
+                    background: category === opt.v ? opt.color : 'white',
+                    color: category === opt.v ? 'white' : '#6B7489',
+                    border: `1.5px solid ${category === opt.v ? opt.color : '#EADFC7'}`,
+                    cursor: isEdit ? 'not-allowed' : 'pointer',
+                    opacity: isEdit && category !== opt.v ? 0.4 : 1,
+                  }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold block mb-1" style={{ color: '#1B2541' }}>
+              방문 시 적립 포인트
+            </label>
+            <input type="number" value={points} onChange={e => setPoints(e.target.value)} min="1" max="100"
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-2"
+              style={{ background: 'white', border: '1.5px solid #EADFC7' }} />
+            <p className="text-[10px] mt-1" style={{ color: '#8893A8' }}>일반적으로 10P를 권장해요.</p>
+          </div>
+          {error && (
+            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: '#FFE4E4', color: '#A82F2F' }}>
+              {error}
+            </p>
+          )}
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-full text-sm"
+              style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+              취소
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 py-2.5 rounded-full text-sm font-bold transition"
+              style={{
+                background: '#FF7A59', color: 'white',
+                opacity: saving ? 0.6 : 1, cursor: saving ? 'wait' : 'pointer',
+              }}>
+              {saving ? '저장 중...' : isEdit ? '저장' : '추가'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ============ 통계 ============
+function AdminStats() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    if (!isSupabaseConfigured) { setLoading(false); return; }
+    setLoading(true);
+
+    const [{ data: students }, { data: posts }, { data: comments },
+      { data: visits }, { data: rewards }, { data: booths }] = await Promise.all([
+      supabase.from('students').select('student_id, is_admin, created_at'),
+      supabase.from('posts').select('id, deleted_at, created_at'),
+      supabase.from('post_comments').select('id, deleted_at, created_at'),
+      supabase.from('booth_visits').select('student_id, booth_code, points'),
+      supabase.from('mission_rewards').select('student_id, reward_type, points'),
+      supabase.from('booths').select('code, is_active'),
+    ]);
+
+    // 학생별 점수 집계
+    const scoreMap = {};
+    (visits || []).forEach(v => { scoreMap[v.student_id] = (scoreMap[v.student_id] || 0) + (v.points || 0); });
+    (rewards || []).forEach(r => { scoreMap[r.student_id] = (scoreMap[r.student_id] || 0) + (r.points || 0); });
+    const scoreList = Object.values(scoreMap);
+
+    // 미션별 완료자
+    const simulationCompleted = new Set((rewards || []).filter(r => r.reward_type === 'simulation').map(r => r.student_id)).size;
+    const postRewardCount = (rewards || []).filter(r => r.reward_type === 'post').length;
+    const visitedStudents = new Set((visits || []).map(v => v.student_id)).size;
+
+    setStats({
+      totalStudents: (students || []).filter(s => !s.is_admin).length,
+      totalAdmins: (students || []).filter(s => s.is_admin).length,
+      totalPosts: (posts || []).filter(p => !p.deleted_at).length,
+      deletedPosts: (posts || []).filter(p => p.deleted_at).length,
+      totalComments: (comments || []).filter(c => !c.deleted_at).length,
+      totalBooths: (booths || []).length,
+      activeBooths: (booths || []).filter(b => b.is_active).length,
+      simulationCompleted,
+      postRewardCount,
+      visitedStudents,
+      totalVisits: (visits || []).length,
+      avgPoints: scoreList.length > 0 ? Math.round(scoreList.reduce((s, p) => s + p, 0) / scoreList.length) : 0,
+      maxPoints: scoreList.length > 0 ? Math.max(...scoreList) : 0,
+      participantCount: scoreList.length,
+    });
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (loading || !stats) {
+    return <div className="p-8 text-center text-sm" style={{ color: '#8893A8' }}>불러오는 중...</div>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-lg">박람회 통계</h3>
+        <button onClick={load} title="새로고침"
+          className="w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* 가입자 */}
+      <StatGroup title="가입 현황" icon={Users} color="#FF7A59" bg="#FFE8E0">
+        <div className="grid grid-cols-2 gap-2">
+          <StatBox label="가입 학생" value={stats.totalStudents} unit="명" big />
+          <StatBox label="관리자" value={stats.totalAdmins} unit="명" />
+        </div>
+      </StatGroup>
+
+      {/* 미션 참여 */}
+      <StatGroup title="미션 참여" icon={Trophy} color="#FFC93C" bg="#FFF3E0">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <StatBox label="시뮬레이션 완주" value={stats.simulationCompleted} unit="명" />
+          <StatBox label="글 적립 학생" value={new Set([]).size} unit="명" hidden />
+          <StatBox label="부스 방문 학생" value={stats.visitedStudents} unit="명" />
+          <StatBox label="총 부스 방문" value={stats.totalVisits} unit="회" />
+          <StatBox label="50자+ 글 적립" value={stats.postRewardCount} unit="건" />
+        </div>
+      </StatGroup>
+
+      {/* 점수 분포 */}
+      <StatGroup title="점수 분포" icon={Award} color="#3BC4A0" bg="#DDF5EA">
+        <div className="grid grid-cols-3 gap-2">
+          <StatBox label="참여자 수" value={stats.participantCount} unit="명" />
+          <StatBox label="평균 점수" value={stats.avgPoints} unit="P" big />
+          <StatBox label="최고 점수" value={stats.maxPoints} unit="P" />
+        </div>
+      </StatGroup>
+
+      {/* 커뮤니티 */}
+      <StatGroup title="커뮤니티 활동" icon={MessageSquare} color="#2B7FFF" bg="#E0EDFF">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <StatBox label="살아있는 글" value={stats.totalPosts} unit="건" />
+          <StatBox label="살아있는 댓글" value={stats.totalComments} unit="건" />
+          <StatBox label="삭제된 글" value={stats.deletedPosts} unit="건" />
+        </div>
+      </StatGroup>
+
+      {/* 부스 */}
+      <StatGroup title="부스 운영" icon={QrCode} color="#A56BFF" bg="#F0E6FF">
+        <div className="grid grid-cols-2 gap-2">
+          <StatBox label="전체 부스" value={stats.totalBooths} unit="개" />
+          <StatBox label="활성 부스" value={stats.activeBooths} unit="개" />
+        </div>
+      </StatGroup>
+    </div>
+  );
+}
+
+function StatGroup({ title, icon: Icon, color, bg, children }) {
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'white', border: '1.5px solid #F0E6D2' }}>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: bg }}>
+          <Icon className="w-4 h-4" style={{ color }} />
+        </div>
+        <h4 className="font-display text-base">{title}</h4>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function StatBox({ label, value, unit, big, hidden }) {
+  if (hidden) return null;
+  return (
+    <div className="p-3 rounded-xl text-center" style={{ background: '#FFFBF0' }}>
+      <p className="text-[10px] mb-0.5" style={{ color: '#8893A8' }}>{label}</p>
+      <p className="font-display flex items-baseline justify-center gap-0.5" style={{ color: '#1B2541' }}>
+        <span className={big ? 'text-3xl' : 'text-2xl'}>{value}</span>
+        <span className="text-xs" style={{ color: '#8893A8' }}>{unit}</span>
+      </p>
+    </div>
+  );
+}
+
+// ============ 확인 모달 (재사용) ============
+function ConfirmModal({ title, message, confirmLabel, confirmColor = '#FF7A59', onConfirm, onCancel }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background: 'rgba(27,37,65,0.7)', backdropFilter: 'blur(4px)' }}
+      onClick={onCancel}>
+      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden" style={{ background: 'white' }}
+        onClick={e => e.stopPropagation()}>
+        <div className="p-5">
+          <h3 className="font-display text-lg mb-2">{title}</h3>
+          <p className="text-sm whitespace-pre-wrap mb-4" style={{ color: '#4A5568' }}>{message}</p>
+          <div className="flex gap-2">
+            <button onClick={onCancel}
+              className="flex-1 py-2.5 rounded-full text-sm"
+              style={{ background: 'white', border: '1.5px solid #EADFC7', color: '#6B7489' }}>
+              취소
+            </button>
+            <button onClick={onConfirm}
+              className="flex-1 py-2.5 rounded-full text-sm font-bold"
+              style={{ background: confirmColor, color: 'white' }}>
+              {confirmLabel || '확인'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
