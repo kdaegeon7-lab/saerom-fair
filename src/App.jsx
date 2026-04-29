@@ -305,13 +305,187 @@ function getEvaluationInfo(subject) {
   };
 }
 
+// 새롬고 특색 프로그램 (출처: 2026학년도 제2호 교육과정 톺아보기)
+// 카테고리: '교과융합' | '수학과학중점' | '학교특색' | '방과후'
 const PROGRAMS = [
-  { icon: Compass, color: '#FF7A59', title: '진로 탐색 프로그램', desc: '계열별 맞춤 멘토링, 대학·학과 탐방, 직업인 초청 특강으로 나만의 진로 지도를 그려봅니다.', tags: ['진로', '멘토링'] },
-  { icon: Lightbulb, color: '#2B7FFF', title: '수학과학중점 심화', desc: '수학·과학 중점 과정 운영으로 이공계열 진학을 준비하는 학생을 위한 심화 프로그램.', tags: ['중점', '이공계'] },
-  { icon: Users, color: '#3BC4A0', title: '자율 동아리 40+', desc: '관심사를 공유하는 친구들과 만드는 우리만의 동아리. 올해 40개 이상 운영 중.', tags: ['동아리', '자율'] },
-  { icon: Globe, color: '#FFC93C', title: '독서·논술 인문 소양', desc: '독서·논술 교육 중심의 인문학 소양 함양 프로그램으로 사고력과 표현력을 키워요.', tags: ['인문', '독서'] },
-  { icon: GraduationCap, color: '#A56BFF', title: '디지털 기반 혁신 수업', desc: '디지털 기반 교육혁신 선도학교로서 AI·데이터 도구를 활용한 수업 운영.', tags: ['디지털', '혁신'] },
-  { icon: Heart, color: '#FF5B8A', title: '학생 맞춤형 프로젝트', desc: '관심사와 진로에 맞춘 자율적 교육과정 + 창의적 역량을 함양하는 프로젝트 수업.', tags: ['맞춤형', '프로젝트'] },
+  // === 교과 융합 ===
+  {
+    category: '교과융합',
+    icon: BookOpen,
+    title: '인문사회 융합 캠프 — 새롬 도서전',
+    period: '5~10월',
+    target: '전학년',
+    desc: '국어·사회 교과 융합 프로그램. 사교 교사 특강을 통한 진로 연계 도서 탐색 및 선정 → 협력 독서 및 내용 탐구 → 선정 도서 홍보 부스 운영(7월 새롬 도서전) → 우수 사례 선정 및 환류 → 체험 답사 프로그램 기획·운영',
+    note: '독서교육 선도학교 프로그램 연계',
+    months: [5,6,7,8,9,10],
+    tags: ['국어', '사회', '독서'],
+  },
+  {
+    category: '교과융합',
+    icon: Lightbulb,
+    title: 'S.O.S — 코딩으로 지역 문제를 구하다',
+    period: '5~11월',
+    target: '전학년',
+    desc: '정보·수학·과학 교과 융합. 학교 및 지역사회의 불편함 찾기(급식 잔반·교실 에너지 등) → 설문/관찰 데이터 수집 → 알고리즘 설계 및 프로토타입 제작(Python·C 활용) → 교내 SW/AI 창의 산출물 발표회(10월) 및 우수작 전시',
+    months: [5,6,7,8,9,10,11],
+    tags: ['정보', '수학', '과학', '코딩'],
+  },
+  {
+    category: '교과융합',
+    icon: Sparkles,
+    title: '세종 이도리더프로그램 (과학)',
+    period: '4~10월',
+    target: '희망 학생',
+    desc: '대학 및 전문 연구기관의 연구원과 1:팀 매칭, 12대 국가전략기술 분야와 연계한 전문 연구 수행 및 성과 공유 (반도체·디스플레이, 이차전지, 첨단모빌리티, 차세대원자력, 첨단바이오, 우주항공·해양, 수소, 사이버보안, AI, 차세대통신, 첨단로봇·제조, 양자)',
+    months: [4,5,6,7,8,9,10],
+    tags: ['과학', '연구', '국가전략기술'],
+  },
+  {
+    category: '교과융합',
+    icon: Sparkles,
+    title: '세종 이도리더프로그램 (수학)',
+    period: '4~10월',
+    target: '희망 학생',
+    desc: 'AI 수학 및 산업수학, 수학적 모델링 및 최적화, 확률·통계 기반 데이터 분석, 알고리즘 및 계산수학, 복잡계 및 네트워크 분석',
+    months: [4,5,6,7,8,9,10],
+    tags: ['수학', '연구', 'AI수학'],
+  },
+
+  // === 수학·과학 중점과정 ===
+  {
+    category: '수학과학중점',
+    icon: Target,
+    title: '실생활 문제 통계적 분석 캠프',
+    period: '7월',
+    target: '수학중점 1학년',
+    desc: '데이터 분석 및 통계적 지식을 활용해 실생활 문제 해결 방법 탐구',
+    months: [7],
+    tags: ['수학', '통계', 'FIX2026'],
+  },
+  {
+    category: '수학과학중점',
+    icon: Target,
+    title: '세상을 보는 방(정)식 캠프',
+    period: '10월',
+    target: '수학중점 2학년',
+    desc: '생활 속의 여러 현상에 담긴 방정식을 탐구하고 수학적 원리를 분석',
+    months: [10],
+    tags: ['수학', '방정식'],
+  },
+  {
+    category: '수학과학중점',
+    icon: Target,
+    title: '기술 속 수학·과학 원리 탐구 캠프',
+    period: '2026.10.23~24',
+    target: '희망 학생',
+    desc: 'FIX2026와 2026 대한민국 미래모빌리티 엑스포에 참여해 다양한 최신 기술 동향을 파악하고 공학 기술의 과학적·수학적 원리 탐구',
+    months: [10],
+    tags: ['수학', '과학', '엑스포'],
+  },
+  {
+    category: '수학과학중점',
+    icon: Compass,
+    title: '1학년 — 과학 진로 탐색 아카데미',
+    period: '7~11월',
+    target: '1학년',
+    desc: '다양한 과학 분야(물리·화학·생명·지구과학)의 기초 개념 탐색, 관련 직업 탐색, 기초 탐구 활동과 진로 독서, 직업 인터뷰 자료 분석 등을 통해 흥미와 적성을 탐색하고 구체적 진로 방향 설정',
+    months: [7,8,9,10,11],
+    tags: ['1학년', '과학', '진로'],
+  },
+  {
+    category: '수학과학중점',
+    icon: Compass,
+    title: '2학년 — 과학 창의 융합 아카데미',
+    period: '7~11월',
+    target: '2학년',
+    desc: '과학 개념을 기반으로 공학·기술·사회적 문제를 융합적으로 연결하여 주제 설정. 팀 프로젝트 형태의 탐구 활동을 통해 자료 조사, 실험 설계, 데이터 분석 및 결과 해석으로 문제 해결 중심의 융합 탐구 실시',
+    months: [7,8,9,10,11],
+    tags: ['2학년', '과학', '융합'],
+  },
+  {
+    category: '수학과학중점',
+    icon: Compass,
+    title: '3학년 — 첨단 과학 아카데미',
+    period: '5~7월',
+    target: '3학년',
+    desc: '인공지능·바이오 기술·신소재 등 첨단 과학 분야를 중심으로 심화 주제를 선정. 학술 자료(논문·전문 서적)를 기반으로 한 탐구 수행, 연구 설계부터 결과 분석, 보고서 작성까지 실제 연구 과정에 준하는 활동',
+    months: [5,6,7],
+    tags: ['3학년', '첨단과학', 'AI'],
+  },
+
+  // === 학교 특색 (선도학교) ===
+  {
+    category: '학교특색',
+    icon: Lightbulb,
+    title: 'AI 리드 융합 캠프',
+    period: '8월',
+    target: '전교생',
+    desc: 'AI 관련 도서를 읽고 4차 산업혁명에 관한 프로젝트 활동 및 창작활동, AI 관련 진로별 프로젝트 토론수업, 퍼실리테이터 진행',
+    months: [8],
+    tags: ['AI', '독서', '4차산업'],
+  },
+  {
+    category: '학교특색',
+    icon: BookOpen,
+    title: '신문사설 읽기 프로그램',
+    period: '5~12월',
+    target: '전교생',
+    desc: '진로 관련 신문사설을 읽고 비판적 사고 능력 및 문해력을 위한 사설읽기 프로그램. 구글클래스룸으로 첨삭지도 진행',
+    note: '한 학기 단위로 운영',
+    months: [5,6,7,8,9,10,11,12],
+    tags: ['독서', '비판적사고', '문해력'],
+  },
+  {
+    category: '학교특색',
+    icon: Users,
+    title: '진로독서 튜터링 프로그램',
+    period: '5~12월',
+    target: '전교생',
+    desc: '독서연구회 교사들과 학생들이 매칭되어 멘토·멘티가 되어 튜터링 수업 진행',
+    months: [5,6,7,8,9,10,11,12],
+    tags: ['독서', '멘토링', '진로'],
+  },
+  {
+    category: '학교특색',
+    icon: Users,
+    title: '이도학생학습공동체 (AI 중점)',
+    period: '3~11월',
+    target: '1·2학년 인공지능 관심 학생',
+    desc: 'AI 및 데이터 활용을 통한 문제 해결 프로젝트 활동, AI 기반 사회 문제 해결 아이디어 탐구, 학생 간 협력 학습 및 결과 공유 활동. 11월 말 활동 결과 발표',
+    months: [3,4,5,6,7,8,9,10,11],
+    tags: ['AI', '학습공동체', '협력'],
+  },
+
+  // === 방과후 프로그램 ===
+  {
+    category: '방과후',
+    icon: GraduationCap,
+    title: '전공 심화 캠프',
+    period: '연중 (8~10교시)',
+    target: '희망 학생',
+    desc: '정규 수업에서 다루기 어려운 교과 심화·탐구 활동을 학생 주도로 운영. 학생이 진로·관심 분야 연계 탐구 주제를 자율 설정 → 동일 관심사 학생 자체 모집 → 지도 교사 직접 섭외 → 운영 계획서 작성 → 개설 승인',
+    note: '진로 연계 탐구 역량 강화, 학생부 진로 활동 내실화',
+    months: [3,4,5,6,7,8,9,10,11,12],
+    tags: ['심화', '학생주도', '진로'],
+  },
+  {
+    category: '방과후',
+    icon: Award,
+    title: '학력 신장 강좌',
+    period: '연중 (8~9교시)',
+    target: '전학년',
+    desc: '학생 수요 조사 → 강좌 개설 → 수강 신청. (수능 교과) 국어·수학·영어·사회·과학 교과별 유형별 학습, 수능 실전 대비 / (예술·체육) 미술 실기, 음악 실기, 체육 전공 기초 등 예체능 진로 연계 강좌',
+    note: '공교육 내 다양한 학습 기회, 사교육 의존도 경감',
+    months: [3,4,5,6,7,8,9,10,11,12],
+    tags: ['수능', '예체능', '학력'],
+  },
+];
+
+const PROGRAM_CATEGORIES = [
+  { key: '교과융합', label: '교과 융합', icon: Sparkles, color: '#FF7A59', bg: '#FFE8E0' },
+  { key: '수학과학중점', label: '수학·과학 중점과정', icon: Target, color: '#A56BFF', bg: '#F0E6FF' },
+  { key: '학교특색', label: '학교 특색 (선도학교)', icon: Lightbulb, color: '#3BC4A0', bg: '#DDF5EA' },
+  { key: '방과후', label: '방과후 프로그램', icon: Award, color: '#2B7FFF', bg: '#E0EDFF' },
 ];
 
 // 미션 정의 - 모두 10P, 자동 적립 방식
@@ -2415,35 +2589,200 @@ function Programs({ onBack }) {
   return (
     <main className="max-w-6xl mx-auto px-6 pt-8 pb-8">
       <BackButton onBack={onBack} />
-      <div className="mb-10">
+      <div className="mb-8">
         <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-4" style={{ background: '#E0EDFF', color: '#2B7FFF' }}>STEP 2</span>
         <h2 className="font-display text-4xl mb-3">학교 특색 프로그램</h2>
-        <p style={{ color: '#4A5568' }}>새롬고가 특별히 공들여 운영하는 프로그램들이에요.</p>
+        <p style={{ color: '#4A5568' }}>
+          새롬고가 특별히 공들여 운영하는 프로그램들이에요. 관심 있는 분야를 미리 체크하고 적극 참여해 보세요.
+        </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {PROGRAMS.map((p, i) => {
-          const Icon = p.icon;
+      {/* 안내 박스 */}
+      <div className="mb-8 p-4 rounded-2xl flex items-start gap-3"
+        style={{ background: '#FFF8E8', border: '1.5px solid #FFC93C' }}>
+        <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: '#FFC93C' }}>
+          <Lightbulb className="w-5 h-5" style={{ color: '#1B2541' }} />
+        </div>
+        <div className="text-sm" style={{ color: '#8B6814' }}>
+          <p className="font-bold mb-1">프로그램 미리 체크하기</p>
+          <p className="leading-relaxed">언제, 어떤 프로그램에 참여할지 미리 체크해 두면 학교생활을 더 알차고 주도적으로 만들 수 있어요. 자세한 운영 계획은 추후 학교 안내를 확인해주세요.</p>
+        </div>
+      </div>
+
+      {/* 카테고리별 섹션 */}
+      <div className="space-y-10 mb-12">
+        {PROGRAM_CATEGORIES.map(cat => {
+          const items = PROGRAMS.filter(p => p.category === cat.key);
+          if (items.length === 0) return null;
+          const CatIcon = cat.icon;
           return (
-            <div key={p.title} className="p-6 rounded-2xl bg-white flex gap-5 hover:-translate-y-0.5 transition-transform"
-              style={{ border: '1.5px solid #F0E6D2', animation: `fadeIn 0.4s ease-out ${i * 0.07}s both` }}>
-              <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: `${p.color}22` }}>
-                <Icon className="w-7 h-7" style={{ color: p.color }} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-display text-xl mb-1.5">{p.title}</h3>
-                <p className="text-sm mb-3" style={{ color: '#4A5568' }}>{p.desc}</p>
-                <div className="flex gap-1.5">
-                  {p.tags.map(t => (
-                    <span key={t} className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#FFFBF0', color: '#6B7489', border: '1px solid #EADFC7' }}>#{t}</span>
-                  ))}
+            <section key={cat.key}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+                  style={{ background: cat.bg }}>
+                  <CatIcon className="w-5 h-5" style={{ color: cat.color }} />
+                </div>
+                <div>
+                  <h3 className="font-display text-2xl">{cat.label}</h3>
+                  <p className="text-xs" style={{ color: '#8893A8' }}>{items.length}개 프로그램</p>
                 </div>
               </div>
-            </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                {items.map((p, i) => (
+                  <ProgramCard key={p.title} program={p} catColor={cat.color} catBg={cat.bg} idx={i} />
+                ))}
+              </div>
+            </section>
           );
         })}
       </div>
+
+      {/* 월별 운영 타임라인 */}
+      <ProgramTimeline />
+
+      {/* 푸터 안내 */}
+      <p className="mt-8 text-xs text-center" style={{ color: '#8893A8' }}>
+        ※ 학교 상황에 따라 세부 일정은 변경될 수 있습니다.<br/>
+        출처: 2026학년도 제2호 교육과정 톺아보기 (2026.4.5 발행)
+      </p>
     </main>
+  );
+}
+
+function ProgramCard({ program: p, catColor, catBg, idx }) {
+  const Icon = p.icon;
+  return (
+    <div className="p-5 rounded-2xl bg-white hover:-translate-y-0.5 transition-transform"
+      style={{ border: '1.5px solid #F0E6D2', animation: `fadeIn 0.4s ease-out ${idx * 0.05}s both` }}>
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: catBg }}>
+          <Icon className="w-5 h-5" style={{ color: catColor }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-display text-lg leading-tight mb-1.5">{p.title}</h4>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+              style={{ background: catBg, color: catColor }}>
+              <Clock className="w-2.5 h-2.5" /> {p.period}
+            </span>
+            {p.target && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: '#FFFBF0', color: '#6B7489', border: '1px solid #EADFC7' }}>
+                {p.target}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="text-sm leading-relaxed mb-3" style={{ color: '#4A5568' }}>{p.desc}</p>
+      {p.note && (
+        <p className="text-xs italic mb-3 px-3 py-1.5 rounded-lg"
+          style={{ background: '#FFFBF0', color: '#8B6814', borderLeft: `3px solid ${catColor}` }}>
+          💡 {p.note}
+        </p>
+      )}
+      {p.tags && (
+        <div className="flex gap-1 flex-wrap">
+          {p.tags.map(t => (
+            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full"
+              style={{ background: '#FFFBF0', color: '#6B7489' }}>#{t}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 월별 운영 타임라인 표
+function ProgramTimeline() {
+  const months = [3,4,5,6,7,8,9,10,11,12];
+
+  return (
+    <section>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+          style={{ background: '#FFF3E0' }}>
+          <Clock className="w-5 h-5" style={{ color: '#F57C00' }} />
+        </div>
+        <div>
+          <h3 className="font-display text-2xl">월별 운영 타임라인</h3>
+          <p className="text-xs" style={{ color: '#8893A8' }}>한눈에 보는 연간 프로그램 일정</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1.5px solid #F0E6D2' }}>
+        {/* 가로 스크롤 컨테이너 */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs" style={{ minWidth: '720px', borderCollapse: 'separate', borderSpacing: 0 }}>
+            <thead>
+              <tr style={{ background: '#FFFBF0' }}>
+                <th className="text-left px-3 py-2 font-display font-bold sticky left-0"
+                  style={{ background: '#FFFBF0', color: '#1B2541', width: '38%', borderBottom: '1.5px solid #EADFC7' }}>
+                  프로그램
+                </th>
+                {months.map(m => (
+                  <th key={m} className="px-1 py-2 text-center font-bold"
+                    style={{ color: '#6B7489', borderBottom: '1.5px solid #EADFC7' }}>
+                    {m}월
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PROGRAM_CATEGORIES.map(cat => {
+                const items = PROGRAMS.filter(p => p.category === cat.key);
+                return (
+                  <React.Fragment key={cat.key}>
+                    <tr>
+                      <td colSpan={months.length + 1} className="px-3 py-2 font-bold"
+                        style={{ background: cat.bg, color: cat.color, borderBottom: `1px solid ${cat.color}33` }}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <cat.icon className="w-3.5 h-3.5" />
+                          {cat.label}
+                        </span>
+                      </td>
+                    </tr>
+                    {items.map(p => (
+                      <tr key={p.title} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 sticky left-0"
+                          style={{ background: 'white', borderBottom: '1px solid #F0E6D2', borderRight: '1px solid #F0E6D2' }}>
+                          <p className="font-bold text-[12px] leading-tight">{p.title}</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: '#8893A8' }}>{p.target}</p>
+                        </td>
+                        {months.map(m => {
+                          const active = p.months?.includes(m);
+                          // 연속된 월인지 판단해서 막대 형태로 표현
+                          const prevActive = p.months?.includes(m - 1);
+                          const nextActive = p.months?.includes(m + 1);
+                          let radius = '0';
+                          if (active && !prevActive && !nextActive) radius = '999px';
+                          else if (active && !prevActive) radius = '999px 0 0 999px';
+                          else if (active && !nextActive) radius = '0 999px 999px 0';
+                          return (
+                            <td key={m} className="px-0 py-2"
+                              style={{ borderBottom: '1px solid #F0E6D2' }}>
+                              {active && (
+                                <div className="h-5"
+                                  style={{ background: cat.color, borderRadius: radius }} />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 모바일 안내 */}
+      <p className="mt-2 text-xs text-center md:hidden" style={{ color: '#8893A8' }}>
+        ← 좌우로 스크롤해서 모든 월을 확인하세요 →
+      </p>
+    </section>
   );
 }
 
