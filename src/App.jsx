@@ -240,6 +240,24 @@ const NO_RANK_FUSION_SUBJECTS = new Set([
   '융합과학 탐구',
 ]);
 
+// 새롬고 편성표의 "표6" 과목 — 특수 목적 고등학교 선택 과목 (과학·체육·예술 계열)
+// 일반 고교에서도 5등급 석차등급이 산출됩니다.
+// 출처: 2025·2026학년도 입학생 새롬고 편성표
+const PYO6_SUBJECTS = new Set([
+  // 과학 실험 4과목
+  '물리학 실험',
+  '화학 실험',
+  '생명과학 실험',
+  '지구과학 실험',
+  // 수학
+  '고급 대수',
+  // 체육
+  '기초 체육 전공 실기',
+  // 예술
+  '음악과 문화',
+  '미술과 사회',
+]);
+
 /**
  * 과목의 평가 방식 정보를 반환한다.
  * @returns {{
@@ -250,6 +268,16 @@ const NO_RANK_FUSION_SUBJECTS = new Set([
  * }}
  */
 function getEvaluationInfo(subject) {
+  // ⭐ 표6 과목은 체육·예술이라도 5등급 석차등급 산출됨 (가장 우선 판정)
+  if (PYO6_SUBJECTS.has(subject.name)) {
+    return {
+      hasRank: true,
+      achievementLevels: 5,
+      label: '5등급',
+      detail: '특수 목적 고등학교 선택 과목(표6) — 일반 고교에서도 석차등급 산출',
+      isPyo6: true,
+    };
+  }
   // 체육·예술 → 3단계 성취도, 석차등급 없음
   if (subject.group === '체육' || subject.group === '예술') {
     return {
@@ -1189,6 +1217,19 @@ function EvaluationLegend() {
             </div>
             <div className="flex items-start gap-2">
               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5 inline-flex items-center gap-0.5"
+                style={{ background: '#F0E6D2', color: '#6B7489' }}>
+                <span style={{ color: '#F57C00' }}>★</span>5등급
+              </span>
+              <div>
+                <p className="font-bold mb-1" style={{ color: '#1B2541' }}>특수목적고 선택과목 (표6)</p>
+                <p className="leading-relaxed">새롬고에서 개설되는 특수 목적 고등학교 선택 과목으로, <b>5등급 석차등급이 산출됩니다</b>. (체육·예술 계열이라도 표6 과목은 일반 체육·예술과 달리 등급이 나옵니다.)</p>
+                <p className="mt-1.5 leading-relaxed" style={{ color: '#6B7489' }}>
+                  해당 과목: 물리학 실험 · 화학 실험 · 생명과학 실험 · 지구과학 실험 · 고급 대수 · 기초 체육 전공 실기 · 음악과 문화 · 미술과 사회
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5 inline-flex items-center gap-0.5"
                 style={{ background: '#FFE4E4', color: '#C53030', border: '1px solid #FCA5A5' }}>⚠ 등급X</span>
               <div>
                 <p className="font-bold mb-1" style={{ color: '#C53030' }}>융합선택 중 사회·과학 9과목 (석차등급 산출 안 됨)</p>
@@ -1201,7 +1242,7 @@ function EvaluationLegend() {
             <div className="flex items-start gap-2">
               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5"
                 style={{ background: '#F3E5F5', color: '#7B1FA2' }}>3단계</span>
-              <p>체육·예술 교과(군). 성취도 A·B·C 3단계로 평가되며 석차등급이 없습니다.</p>
+              <p>체육·예술 교과(군) (표6 과목 제외). 성취도 A·B·C 3단계로 평가되며 석차등급이 없습니다.</p>
             </div>
           </div>
 
@@ -1217,16 +1258,18 @@ function EvaluationLegend() {
 // ============ 평가방식 배지 ============
 function EvalBadge({ evalInfo, on }) {
   // 5등급 → 회색 배지 (정상)
+  // 표6 과목 → 회색 배지에 ★ 표시 (특수목적고 선택과목)
   // 등급X (융합 9과목) → 빨강 강조 배지
   // 3단계 (체육·예술) → 보라 배지
   if (evalInfo.hasRank) {
     return (
-      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-0.5"
         title={evalInfo.detail}
         style={{
           background: on ? 'rgba(255,255,255,0.22)' : '#F0E6D2',
           color: on ? 'white' : '#6B7489',
         }}>
+        {evalInfo.isPyo6 && <span style={{ color: on ? '#FFE082' : '#F57C00' }}>★</span>}
         {evalInfo.label}
       </span>
     );
