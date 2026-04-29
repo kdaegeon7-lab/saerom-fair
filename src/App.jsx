@@ -542,6 +542,38 @@ export default function App() {
     setAuthChecking(false);
   }, []);
 
+  // ===== 브라우저/폰 뒤로가기 처리 =====
+  // 사이트 진입 시 history에 'home' 상태 baseline을 깔아둔다.
+  useEffect(() => {
+    if (!user) return;
+    // 첫 진입 시 baseline state 등록 (한 번만)
+    if (!window.history.state || !window.history.state.appPage) {
+      window.history.replaceState({ appPage: 'home' }, '');
+    }
+  }, [user]);
+
+  // popstate 이벤트로 폰 뒤로가기 → page 상태 변경
+  useEffect(() => {
+    const onPopState = (e) => {
+      const target = e.state?.appPage || 'home';
+      setPage(target);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // setPage 대신 navigate를 사용 → history에 push
+  const navigate = (target) => {
+    if (target === page) return;
+    if (target === 'home') {
+      // 홈으로 갈 때는 history를 새로 시작 (뒤로가기 누르면 사이트 종료됨)
+      window.history.pushState({ appPage: 'home' }, '');
+    } else {
+      window.history.pushState({ appPage: target }, '');
+    }
+    setPage(target);
+  };
+
   const handleLogin = (userData) => {
     setUser(userData);
     ls.set('current_user', userData);
@@ -552,6 +584,8 @@ export default function App() {
     setUser(null);
     ls.remove('current_user');
     setPage('home');
+    // 로그아웃 시 history도 정리
+    window.history.replaceState({ appPage: 'home' }, '');
   };
 
   if (authChecking) return null;
@@ -573,13 +607,13 @@ export default function App() {
 
       {!isSupabaseConfigured && <SupabaseWarning />}
 
-      <Header onHome={() => setPage('home')} page={page} user={user} onLogout={handleLogout} onAdmin={user?.is_admin ? () => setPage('admin') : null} />
+      <Header onHome={() => navigate('home')} page={page} user={user} onLogout={handleLogout} onAdmin={user?.is_admin ? () => navigate('admin') : null} />
       <div className="fade-in flex-1">
-        {page === 'home' && <Home onNavigate={setPage} user={user} />}
-        {page === 'simulation' && <Simulation onBack={() => setPage('home')} user={user} />}
-        {page === 'programs' && <Programs onBack={() => setPage('home')} />}
-        {page === 'fair' && <Fair onBack={() => setPage('home')} user={user} />}
-        {page === 'admin' && user?.is_admin && <AdminPanel onBack={() => setPage('home')} user={user} />}
+        {page === 'home' && <Home onNavigate={navigate} user={user} />}
+        {page === 'simulation' && <Simulation onBack={() => navigate('home')} user={user} />}
+        {page === 'programs' && <Programs onBack={() => navigate('home')} />}
+        {page === 'fair' && <Fair onBack={() => navigate('home')} user={user} />}
+        {page === 'admin' && user?.is_admin && <AdminPanel onBack={() => navigate('home')} user={user} />}
       </div>
       <Footer />
     </div>
@@ -1858,13 +1892,13 @@ function ResultScreen({ cohort, groups, selected, user, onEdit, onBack }) {
           </div>
         </div>
 
-        {/* 푸터 (캡처 시 워터마크처럼) */}
-        <div className="text-center mt-8 pt-6 border-t" style={{ borderColor: '#EADFC7' }}>
-          <p className="text-xs" style={{ color: '#8893A8' }}>
-            © 2026 새롬고등학교 교육과정 박람회 · 수학과학중점과정 기준
-          </p>
-          <p className="text-[10px] mt-1" style={{ color: '#B8B0A0' }}>
-            ※ 이 결과는 시뮬레이션이며, 실제 과목 선택 시 변경될 수 있습니다.
+        {/* 푸터 (시뮬레이션 안내 강조) */}
+        <div className="mt-8 p-4 rounded-2xl flex items-start gap-3"
+          style={{ background: '#FFF3E0', border: '1.5px solid #FFC93C' }}>
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#F57C00' }} />
+          <p className="text-sm font-bold leading-relaxed" style={{ color: '#8B6814' }}>
+            ※ 이 결과는 <span style={{ color: '#C53030' }}>시뮬레이션</span>이며,<br className="sm:hidden" />
+            실제 과목 선택 시 변경될 수 있습니다.
           </p>
         </div>
       </div>
@@ -1920,9 +1954,9 @@ function AdminPanel({ onBack, user }) {
           const on = tab === t.k;
           return (
             <button key={t.k} onClick={() => setTab(t.k)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-sm font-bold transition whitespace-nowrap"
               style={{ background: on ? '#1B2541' : '#FFFBF0', color: on ? '#FFC93C' : '#6B7489', border: '1.5px solid #EADFC7' }}>
-              <Icon className="w-4 h-4" /> {t.label}
+              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" /> {t.label}
             </button>
           );
         })}
@@ -3066,9 +3100,9 @@ function Fair({ onBack, user }) {
           const on = tab === t.k;
           return (
             <button key={t.k} onClick={() => setTab(t.k)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-sm font-bold transition whitespace-nowrap"
               style={{ background: on ? '#1B2541' : '#FFFBF0', color: on ? '#FFFBF0' : '#6B7489', border: '1.5px solid #EADFC7' }}>
-              <Icon className="w-4 h-4" /> {t.label}
+              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" /> {t.label}
             </button>
           );
         })}
