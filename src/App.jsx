@@ -479,6 +479,7 @@ function AuthScreen({ onLogin }) {
         student_id: data.student_id,
         nickname: data.nickname,
         career_paths: data.career_paths || [],
+        is_admin: data.is_admin || false,
       });
     } catch (err) {
       setError('로그인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
@@ -525,7 +526,7 @@ function AuthScreen({ onLogin }) {
       });
       if (insErr) throw insErr;
 
-      onLogin({ student_id: sid, nickname: nick, career_paths: careers });
+      onLogin({ student_id: sid, nickname: nick, career_paths: careers, is_admin: false });
     } catch (err) {
       setError('등록 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
     } finally {
