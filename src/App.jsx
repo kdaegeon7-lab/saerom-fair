@@ -1005,9 +1005,9 @@ function Home({ onNavigate, user }) {
           <span className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-4" style={{ background: '#1B2541', color: '#FFC93C' }}>
             2026 새롬고 교육과정 박람회
           </span>
-          <h1 className="font-display text-4xl md:text-6xl leading-tight mb-3">
+          <h1 className="font-display text-3xl md:text-5xl leading-tight mb-3">
             <span style={{ color: '#FF7A59' }}>{user.nickname}</span>님,<br/>
-            나만의 고등학교,<br className="md:hidden" />
+            나만의 고등학교,<br/>
             교육과정을 설계해 볼까요?
           </h1>
           <p className="text-base md:text-lg max-w-xl" style={{ color: '#4A5568' }}>
@@ -1055,7 +1055,7 @@ function Home({ onNavigate, user }) {
           </div>
         </div>
         <div className="text-sm opacity-80 pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-          박람회 종료 후에도 이 사이트는 <b style={{ color: '#FFC93C' }}>상시 운영</b>됩니다.
+          이 사이트는 <b style={{ color: '#FFC93C' }}>교육과정 박람회 운영 기간</b>만 운영됩니다.
         </div>
       </section>
     </main>
@@ -2823,6 +2823,8 @@ function ProgramTimeline() {
         }
         .timeline-name {
           font-size: 11px;
+          word-break: keep-all;
+          overflow-wrap: break-word;
         }
         .timeline-target {
           font-size: 10px;
