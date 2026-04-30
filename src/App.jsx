@@ -1007,7 +1007,8 @@ function Home({ onNavigate, user }) {
           </span>
           <h1 className="font-display text-4xl md:text-6xl leading-tight mb-3">
             <span style={{ color: '#FF7A59' }}>{user.nickname}</span>님,<br/>
-            오늘의 진로 여정을 시작해볼까요?
+            나만의 고등학교,<br className="md:hidden" />
+            교육과정을 설계해 볼까요?
           </h1>
           <p className="text-base md:text-lg max-w-xl" style={{ color: '#4A5568' }}>
             선택과목이 고민이라면, 특색 프로그램이 궁금하다면,<br />
@@ -2747,16 +2748,16 @@ function ProgramTimeline() {
       <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1.5px solid #F0E6D2' }}>
         {/* 가로 스크롤 컨테이너 */}
         <div className="overflow-x-auto">
-          <table className="w-full text-xs" style={{ minWidth: '720px', borderCollapse: 'separate', borderSpacing: 0 }}>
+          <table className="w-full text-xs timeline-table" style={{ minWidth: '720px', borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead>
               <tr style={{ background: '#FFFBF0' }}>
-                <th className="text-left px-3 py-2 font-display font-bold sticky left-0"
-                  style={{ background: '#FFFBF0', color: '#1B2541', width: '38%', borderBottom: '1.5px solid #EADFC7' }}>
+                <th className="timeline-name-col text-left px-2 sm:px-3 py-2 font-display font-bold sticky left-0"
+                  style={{ background: '#FFFBF0', color: '#1B2541', borderBottom: '1.5px solid #EADFC7' }}>
                   프로그램
                 </th>
                 {months.map(m => (
                   <th key={m} className="px-1 py-2 text-center font-bold"
-                    style={{ color: '#6B7489', borderBottom: '1.5px solid #EADFC7' }}>
+                    style={{ color: '#6B7489', borderBottom: '1.5px solid #EADFC7', minWidth: '52px' }}>
                     {m}월
                   </th>
                 ))}
@@ -2778,10 +2779,10 @@ function ProgramTimeline() {
                     </tr>
                     {items.map(p => (
                       <tr key={p.title} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 sticky left-0"
+                        <td className="timeline-name-col px-2 sm:px-3 py-2 sticky left-0"
                           style={{ background: 'white', borderBottom: '1px solid #F0E6D2', borderRight: '1px solid #F0E6D2' }}>
-                          <p className="font-bold text-[12px] leading-tight">{p.title}</p>
-                          <p className="text-[10px] mt-0.5" style={{ color: '#8893A8' }}>{p.target}</p>
+                          <p className="timeline-name font-bold leading-tight">{p.title}</p>
+                          <p className="timeline-target mt-0.5" style={{ color: '#8893A8' }}>{p.target}</p>
                         </td>
                         {months.map(m => {
                           const active = p.months?.includes(m);
@@ -2794,7 +2795,7 @@ function ProgramTimeline() {
                           else if (active && !nextActive) radius = '0 999px 999px 0';
                           return (
                             <td key={m} className="px-0 py-2"
-                              style={{ borderBottom: '1px solid #F0E6D2' }}>
+                              style={{ borderBottom: '1px solid #F0E6D2', minWidth: '52px' }}>
                               {active && (
                                 <div className="h-5"
                                   style={{ background: cat.color, borderRadius: radius }} />
@@ -2811,6 +2812,37 @@ function ProgramTimeline() {
           </table>
         </div>
       </div>
+
+      {/* 타임라인 반응형 스타일 */}
+      <style>{`
+        /* 모바일: 프로그램명 칸 좁게, 글자 작게, target 숨김 */
+        .timeline-name-col {
+          width: 130px;
+          min-width: 130px;
+          max-width: 130px;
+        }
+        .timeline-name {
+          font-size: 11px;
+        }
+        .timeline-target {
+          font-size: 10px;
+          display: none;
+        }
+        /* 데스크탑(640px 이상): 프로그램명 칸 넉넉하게, target 표시 */
+        @media (min-width: 640px) {
+          .timeline-name-col {
+            width: auto;
+            min-width: 220px;
+            max-width: none;
+          }
+          .timeline-name {
+            font-size: 12px;
+          }
+          .timeline-target {
+            display: block;
+          }
+        }
+      `}</style>
 
       {/* 모바일 안내 */}
       <p className="mt-2 text-xs text-center md:hidden" style={{ color: '#8893A8' }}>
